@@ -100,7 +100,7 @@ val AUDIO_AI = linkedMapOf("off" to "Desligado", "auto" to "Automático", "dialo
 val EQS = linkedMapOf("padrao" to "Padrão", "voz" to "Voz", "filme" to "Filme", "musica" to "Música", "esporte" to "Esporte", "noturno" to "Noturno")
 private val EQ_V = mapOf("padrao" to intArrayOf(0, 0, 0), "voz" to intArrayOf(-3, 4, 1), "filme" to intArrayOf(4, 0, 2), "musica" to intArrayOf(3, 0, 3), "esporte" to intArrayOf(1, 2, 3), "noturno" to intArrayOf(-4, 2, 0))
 val FITS = listOf("Original", "Preencher (sem faixas)", "Zoom 120%")
-val AI_UP = linkedMapOf("auto" to "Automática", "off" to "Desligada")
+val AI_UP = linkedMapOf("auto" to "Automática (IA decide)", "1440" to "Ultra 1440p", "1080" to "Alta 1080p", "off" to "Desligada")
 val QUALITY = linkedMapOf("auto" to "Automática", "480" to "480p", "720" to "720p", "1080" to "1080p", "2160" to "2160p")
 
 /** Filtro de cor do vídeo: modo de imagem + brilho, contraste e cor + realce. */
@@ -254,7 +254,8 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
     var osdId by remember { mutableIntStateOf(0) }
     var wantPlay by remember { mutableIntStateOf(1) }
     var aiLabel by remember { mutableStateOf("") }
-    val ai = remember { object { var key = ""; var gpuOff = false; val hist = LongArray(10); var idx = 0 } }
+    // estado da IA de imagem neste vídeo: cap = limite do disjuntor (2 Ultra, 1 Alta, 0 sem reforço)
+    val ai = remember { object { var key = ""; var cap = 2; var hadFx = false; var compare = false; var lost = 0L; var stable = 0; var tier = 0; var outH = 0; var hot = 0; var bestOn = false; var buffered = false; val hist = LongArray(10); var idx = 0 } }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
@@ -293,27 +294,58 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
         sv.setFractionalTextSize(when (PP.subSize) { 0 -> .045f; 2 -> .075f; else -> .058f })
     }
 
-    /** IA de imagem: reconstrói para 1080p o vídeo abaixo disso (sistema do AstroLume 0.25). */
+    /** IA de imagem: decide pelo diagnóstico do aparelho e pelo disjuntor (Ultra 1440p, Alta 1080p ou modo leve). */
     fun applyAi() {
-        val plan = ImageAi.plan(PP.aiUp == "auto", player.videoFormat, ai.gpuOff)
-        aiLabel = plan.label
+        val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare)
+        aiLabel = plan.label; ai.tier = plan.tier; ai.outH = plan.outH
         if (plan.key == ai.key) return
-        val had = ai.key.startsWith("up") || ai.key == "sharp"
         ai.key = plan.key
-        if (plan.effects.isEmpty() && !had) return
-        try { player.setVideoEffects(plan.effects) } catch (e: Throwable) { ai.gpuOff = true; aiLabel = "" }
+        if (plan.effects.isEmpty() && !ai.hadFx) return
+        try { player.setVideoEffects(plan.effects); ai.hadFx = plan.effects.isNotEmpty() || ai.hadFx } catch (e: Throwable) { ai.cap = 0; aiLabel = "" }
     }
 
-    /** Quadros perdidos nos últimos 10 s; se a TV engasgar com o reforço, ele é desligado e o vídeo segue. */
+    fun stepDown(why: String) {
+        if (ai.cap <= 0 || ai.tier <= 0) return
+        ai.cap = ai.tier - 1; ai.stable = 0; ai.hist.fill(0L); applyAi()
+        say(why + if (ai.cap == 1) ": IA desceu para 1080p" else ": reforço pausado neste vídeo")
+    }
+
+    /** Disjuntor (a cada 1 s): quadros perdidos em 10 s e temperatura do chip; sobe de novo após 60 s estável. */
     fun watchDrops() {
         val dc = player.videoDecoderCounters ?: return
         dc.ensureUpdated()
         val now = dc.droppedBufferCount.toLong() + dc.skippedOutputBufferCount
         val old = ai.hist[ai.idx]; ai.hist[ai.idx] = now; ai.idx = (ai.idx + 1) % ai.hist.size
-        val lost = if (old in 1..now) now - old else 0L
-        if ((ai.key == "up1080" || ai.key == "sharp") && player.isPlaying && lost > 24) {
-            ai.gpuOff = true; ai.hist.fill(0L); applyAi(); say("A TV estava perdendo quadros: reforço de imagem pausado neste vídeo")
+        ai.lost = if (old in 1..now) now - old else 0L
+        if (!player.isPlaying) return
+        if (ai.tier > 0 && ai.lost > 24) { stepDown("A TV estava perdendo quadros"); return }
+        if (Build.VERSION.SDK_INT >= 29) {
+            val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+            ai.hot = pm.currentThermalStatus
+            if (ai.tier > 0 && ai.hot >= android.os.PowerManager.THERMAL_STATUS_MODERATE) { stepDown("O chip esquentou"); return }
         }
+        if (ai.lost <= 2 && ai.hot < 2) ai.stable++ else ai.stable = 0
+        val top = if (PP.aiUp == "auto") ImageAi.maxTier() else 2
+        if (ai.stable >= 60 && ai.cap < top) { ai.cap++; ai.stable = 0; ai.hist.fill(0L); applyAi() }
+        // modo leve: sem reforço na placa, pede a melhor versão do canal quando a internet está firme por 20 s
+        if (ai.tier == 0 && PP.aiUp != "off") {
+            if (player.playbackState == Player.STATE_BUFFERING) { ai.buffered = true; if (ai.bestOn) { ai.bestOn = false; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(false).build() } }
+            else if (!ai.bestOn && !ai.buffered && ai.stable >= 20 && tracks.groups.count { it.type == MC.TRACK_TYPE_VIDEO && it.length > 1 } > 0) {
+                ai.bestOn = true; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(true).build()
+            }
+        }
+    }
+
+    /** Frequência da tela igual à do vídeo (24/25/30/50/60 Hz), quando a TV aceita; tira os trancos de movimento. */
+    fun matchRate() {
+        if (!PP.matchHz || Build.VERSION.SDK_INT < 23) return
+        val fps = player.videoFormat?.frameRate ?: return
+        if (fps <= 0f) return
+        val act = ctx as? android.app.Activity ?: return
+        val d = act.windowManager.defaultDisplay; val cur = d.mode
+        val best = d.supportedModes.filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }
+            .firstOrNull { m -> val k = m.refreshRate / fps; kotlin.math.abs(k - Math.round(k)) < 0.01f && Math.round(k) in 1..2 } ?: return
+        if (best.modeId != cur.modeId) act.window.attributes = act.window.attributes.also { it.preferredDisplayModeId = best.modeId }
     }
 
     /** Tira as faixas pretas: olha uma foto pequena do vídeo e mede as bordas escuras. */
@@ -338,7 +370,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
         val l = object : Player.Listener {
             override fun onPlaybackStateChanged(s: Int) {
                 buffering = s == Player.STATE_BUFFERING
-                if (s == Player.STATE_READY) { err = null; dur = player.duration.coerceAtLeast(0) }
+                if (s == Player.STATE_READY) { err = null; dur = player.duration.coerceAtLeast(0); matchRate() }
                 if (s == Player.STATE_ENDED && !req.live) { save(); st.closePlayer() }
             }
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
@@ -353,7 +385,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
             override fun onCues(c: CueGroup) { (holder[2] as? SubtitleView)?.setCues(c.cues) }
             override fun onAudioSessionIdChanged(id: Int) { fx()?.release(); holder[3] = AudioFx(id).also { it.apply() } }
             override fun onPlayerError(e: PlaybackException) {
-                if (e.errorCode in 7000..7999 && !ai.gpuOff) { ai.gpuOff = true; ai.key = ""; try { player.setVideoEffects(emptyList()) } catch (x: Throwable) {}; startAt = player.currentPosition; attempt++; say("Reforço de imagem desligado neste vídeo (a TV não aguentou)"); return }
+                if (e.errorCode in 7000..7999 && ai.cap > 0) { ai.cap = 0; ai.key = ""; try { player.setVideoEffects(emptyList()) } catch (x: Throwable) {}; startAt = player.currentPosition; attempt++; say("Reforço de imagem desligado neste vídeo (a TV não aguentou)"); return }
                 val bad = e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                 if (bad && !triedVlc) { triedVlc = true; eng.ok.setUserAgent(UA_VLC); startAt = player.currentPosition; attempt++; return }
                 if (req.live && !triedTs && url.contains(".m3u8") && req.ext == "ts") { triedTs = true; url = url.replace(".m3u8", ".ts"); attempt++; return }
@@ -362,7 +394,10 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
             }
         }
         player.addListener(l)
-        onDispose { save(); player.removeListener(l); fx()?.release(); player.release() }
+        onDispose {
+            save(); player.removeListener(l); fx()?.release(); player.release()
+            (ctx as? android.app.Activity)?.window?.let { w -> if (w.attributes.preferredDisplayModeId != 0) w.attributes = w.attributes.also { it.preferredDisplayModeId = 0 } }
+        }
     }
     LaunchedEffect(url, attempt, subUrl, audioUrl) { eng.load(url, subUrl, audioUrl, if (req.live) 0L else startAt) }
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }
@@ -499,8 +534,15 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                             Stepper("Contraste", PP.contrast, "") { d -> PP.contrast = (PP.contrast + d * 5).coerceIn(-50, 50) }
                             Stepper("Cor (saturação)", PP.sat, "") { d -> PP.sat = (PP.sat + d * 5).coerceIn(-50, 50) }
                         } else T("Escolha \"Personalizado\" para ajustar brilho, contraste e cor.", 11, C.dim)
-                        Opts("IA de imagem (até 1080p)", AI_UP, PP.aiUp) { v -> PP.aiUp = v; say(if (v == "auto") "IA de imagem ligada" else "IA de imagem desligada") }
-                        if (aiLabel.isNotBlank()) T("Agora: $aiLabel", 11, C.a1, FontWeight.SemiBold)
+                        Opts("IA de imagem", AI_UP, PP.aiUp) { v -> PP.aiUp = v; ai.cap = 2; ai.key = "-"; applyAi(); say("IA de imagem: ${AI_UP[v]}") }
+                        Btn(if (ai.compare) "◐ Comparar: mostrando o ORIGINAL" else "◐ Comparar com o original", on = ai.compare, locked = false) { ai.compare = !ai.compare; applyAi(); say(if (ai.compare) "Original, sem IA" else "Com IA: $aiLabel") }
+                        val f = player.videoFormat
+                        T(listOfNotNull(
+                            f?.let { "Entrada ${it.width}×${it.height}" + if (it.frameRate > 0) " · ${Math.round(it.frameRate)} quadros/s" else "" },
+                            if (ai.outH > 0) "Saída ${ai.outH}p" else null,
+                            "Perdidos: ${ai.lost} em 10 s",
+                            if (ai.hot >= 2) "Chip quente" else null,
+                        ).joinToString(" · ") + if (aiLabel.isNotBlank()) "\nAgora: $aiLabel" else "", 11, C.a1, FontWeight.SemiBold, lineHeight = 15)
                         Opts("Realce de imagem", ENHANCE, PP.enhance) { v -> PP.enhance = v }
                         Opts("Qualidade máxima", QUALITY, PP.quality) { v -> PP.quality = v; eng.applyQuality(); say("Qualidade: ${QUALITY[v]}") }
                         T("Vale para todos os vídeos e fica salvo. O realce aumenta contraste e cor de forma leve, sem pesar o aparelho.", 11, C.dim)

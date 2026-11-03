@@ -18,6 +18,9 @@ class MainActivity : ComponentActivity() {
         Store.init(this)
         PP.init(this)
         Tmdb.init(this)
+        // diagnóstico de imagem: uma vez por versão, em segundo plano, 20 s depois de abrir (fora da abertura)
+        GpuProbe.load(PP.sp, BuildConfig.VERSION_NAME)
+        if (GpuProbe.result == null) android.os.Handler(mainLooper).postDelayed({ GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) }, 20_000)
         KeyMap.init(prefs)
         C.pal = THEMES[prefs.theme] ?: C.pal
         Catalog.rev.let { } // cria o catálogo (e seus estados) na linha da tela, antes da linha de fundo

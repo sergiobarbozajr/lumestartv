@@ -58,8 +58,20 @@ fun TmdbPanel(st: AppState, locked: Boolean) {
 fun AiImagePanel(st: AppState, locked: Boolean) {
     PP.rev.let { }
     T("Melhora a imagem durante o vídeo: realça contraste e cor de forma leve, e o modo de imagem ajusta brilho, contraste e saturação. Roda na placa de vídeo da TV, sem pesar.", 13, C.muted, lineHeight = 19)
-    Opts("IA de imagem: reconstruir até 1080p", AI_UP, PP.aiUp, locked) { PP.aiUp = it }
-    T("Vídeos abaixo de 1080p (480p, 720p) são reconstruídos para 1080p na placa de vídeo: os pixels que faltam são recriados a partir dos vizinhos e as bordas ganham nitidez sem criar ruído. Vídeos em 1080p ou 4K vão direto. Se a TV começar a perder quadros, o reforço desliga sozinho naquele vídeo. " + ImageAi.summary(), 11, C.dim, lineHeight = 15)
+    Opts("IA de imagem", AI_UP, PP.aiUp, locked) { PP.aiUp = it }
+    val r = GpuProbe.result
+    val tierName = listOf("Modo leve", "Alta 1080p", "Ultra 1440p")
+    KV(listOf(
+        "Diagnóstico" to if (GpuProbe.running) "testando…" else if (r == null) "ainda não feito" else "feito",
+        "Placa de vídeo" to (r?.gpu?.take(34) ?: "—"),
+        "Reconstruir 1080p" to (r?.let { if (it.ms1080 < 99f) "%.1f ms por quadro".format(it.ms1080) else "não suportado" } ?: "—"),
+        "Reconstruir 1440p" to (r?.let { if (it.ms1440 < 99f) "%.1f ms por quadro".format(it.ms1440) else "não suportado" } ?: "—"),
+        "IA no chip da TV" to if (ImageAi.hwAi) "sim (${ImageAi.chip})" else "não encontrada",
+        "Melhor para este aparelho" to tierName[ImageAi.maxTier()] + if (ImageAi.maxTier() == 0 && ImageAi.hwAi) " + IA da TV" else "",
+    ))
+    Btn(if (GpuProbe.running) "Testando…" else "Testar o aparelho de novo", locked = locked) { GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) { st.say("Diagnóstico pronto: " + tierName[ImageAi.maxTier()]) } }
+    T("Automática: a IA testa este aparelho e usa o máximo que ele aguenta. Vídeos abaixo do alvo são reconstruídos na placa de vídeo (os pixels que faltam são recriados a partir dos vizinhos, com nitidez adaptativa). Durante o vídeo, se a TV perder quadros ou o chip esquentar, ela desce de 1440p para 1080p ou para o modo leve, e sobe de novo depois de 1 minuto estável. No modo leve, ela pede a melhor versão do canal quando a internet está firme e deixa a IA do chip da TV fazer o 4K.", 11, C.dim, lineHeight = 15)
+    Opts("Frequência da tela igual à do vídeo", linkedMapOf("1" to "Ligada", "0" to "Desligada"), if (PP.matchHz) "1" else "0", locked) { PP.matchHz = it == "1" }
     Opts("Realce de cor e contraste", ENHANCE, PP.enhance, locked) { PP.enhance = it }
     Opts("Modo de imagem", PRESETS, PP.preset, locked) { PP.preset = it }
     if (PP.preset == "pers") {

@@ -1,6 +1,8 @@
 package com.lumestar.tv
 
 import android.content.Context
+import android.opengl.EGL14
+import android.opengl.EGLConfig
 import android.opengl.GLES20
 import androidx.media3.common.Effect
 import androidx.media3.common.Format
@@ -25,7 +27,8 @@ import kotlin.math.roundToInt
  */
 @UnstableApi
 object ImageAi {
-    class Plan(val key: String, val effects: List<Effect>, val label: String)
+    /** tier: 2 = Ultra 1440p, 1 = Alta 1080p, 0 = sem reforço na placa */
+    class Plan(val key: String, val effects: List<Effect>, val label: String, val tier: Int, val outH: Int)
 
     val hwAi: Boolean by lazy {
         val libs = listOf("librtk_libvip_nnsr.so", "libaisr.so", "libmtk_aisr.so", "libpq_aisr.so", "libamlogic_aipq.so", "libaipq.so")
@@ -40,41 +43,126 @@ object ImageAi {
         } catch (e: Throwable) { android.os.Build.HARDWARE }
     }
 
-    fun summary(): String = "Chip: $chip · " + if (hwAi) "super-resolução neural no chip: sim" else "super-resolução no chip: não encontrada (o app usa a placa de vídeo)"
+    /** O máximo que este aparelho aguenta, medido pelo diagnóstico (GpuProbe). */
+    fun maxTier(): Int = GpuProbe.result?.maxTier ?: 1
 
-    /** on: "auto" liga o reforço; gpuOff: a TV perdeu quadros com ele neste vídeo. */
-    fun plan(on: Boolean, f: Format?, gpuOff: Boolean): Plan {
-        if (!on) return Plan("off", emptyList(), "")
+    /**
+     * mode: "auto" (a IA decide), "1440", "1080" ou "off". cap: limite do disjuntor neste vídeo.
+     * compare: o botão Comparar está mostrando o original.
+     */
+    fun plan(mode: String, f: Format?, cap: Int, compare: Boolean): Plan {
+        if (mode == "off" || compare) return Plan("off", emptyList(), if (compare) "Original (comparando)" else "", 0, 0)
         val h = f?.height ?: 0; val w = f?.width ?: 0
         val hdr = f?.colorInfo?.let { it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 || it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG } ?: false
-        if (hdr) return Plan("hdr", emptyList(), if (hwAi) "IA da TV · HDR" else "HDR original")
-        if (h <= 0) return Plan("wait", emptyList(), "")
+        if (hdr) return Plan("hdr", emptyList(), if (hwAi) "IA da TV · HDR" else "HDR original", 0, 0)
+        if (h <= 0) return Plan("wait", emptyList(), "", 0, 0)
+        val want = when (mode) { "1440" -> 2; "1080" -> 1; else -> maxTier() }
+        val tier = minOf(want, cap, if (mode == "auto") maxTier() else 2)
         val src = "${h}p"
-        if (gpuOff) return Plan("paused", emptyList(), "Reforço pausado (fluidez)")
-        return if (hwAi) {
-            if (h >= 900 || w >= 1600) Plan("pass", emptyList(), "IA da TV · 4K")
-            else Plan("up1080", listOf(AiSharpen(1080, 0.55f, 0.5f)), "IA $src→1080p + IA da TV")
-        } else when {
-            h < 900 && w < 1600 -> Plan("up1080", listOf(AiSharpen(1080, 0.6f, 0.5f)), "IA $src→1080p")
-            h <= 1100 -> Plan("sharp", listOf(AiSharpen(0, 0.4f, 0.4f)), "IA · nitidez 1080p")
-            else -> Plan("pass", emptyList(), "4K original")
+        return when {
+            tier >= 2 && h < 1400 -> Plan("u1440", listOf(AiSharpen(1440, 0.5f, 0.45f, lite = true)), "IA $src→1440p" + if (hwAi) " + IA da TV" else "", 2, 1440)
+            tier >= 1 && h < 900 && w < 1600 -> Plan("u1080", listOf(AiSharpen(1080, 0.55f, 0.5f)), "IA $src→1080p" + if (hwAi) " + IA da TV" else "", 1, 1080)
+            tier >= 1 && !hwAi && h <= 1100 -> Plan("sharp", listOf(AiSharpen(0, 0.4f, 0.4f, lite = true)), "IA · nitidez $src", 1, h)
+            // modo leve: sem reforço na placa; com IA no chip, ela faz o 4K; sem, nitidez leve na resolução original se couber
+            hwAi -> Plan("pass", emptyList(), "IA da TV · 4K", 0, h)
+            (GpuProbe.result?.msLite ?: 99f) < 14f -> Plan("lite", listOf(AiSharpen(0, 0.35f, 0.35f, lite = true)), "IA leve · nitidez $src", 0, h)
+            else -> Plan("none", emptyList(), "Modo leve", 0, h)
         }
+    }
+}
+
+/**
+ * Diagnóstico de imagem: mede de verdade quanto a placa de vídeo leva para reconstruir um quadro
+ * (720p → 1080p completo e 720p → 1440p leve), escondido, uma vez por versão do app. ~2–3 s.
+ */
+@UnstableApi
+object GpuProbe {
+    class Result(val gpu: String, val gl: String, val ms1080: Float, val ms1440: Float, val msLite: Float) {
+        // margem: 1080p e 1440p a 30 quadros/s com sobra para o vídeo (orçamento real ~33 ms; usamos 12 e 10)
+        val maxTier get() = when { ms1440 in 0.1f..10f -> 2; ms1080 in 0.1f..12f -> 1; else -> 0 }
+        fun line() = "Placa: $gpu · 1080p: ${fmt(ms1080)} · 1440p: ${fmt(ms1440)}"
+        private fun fmt(v: Float) = if (v <= 0f || v >= 99f) "falhou" else "%.1f ms".format(v)
+    }
+    @Volatile var result: Result? = null
+    @Volatile var running = false
+
+    fun load(sp: android.content.SharedPreferences, ver: String) {
+        if (sp.getString("sondaVer", "") != ver) return
+        result = Result(sp.getString("sondaGpu", "") ?: "", sp.getString("sondaGl", "") ?: "", sp.getFloat("sonda1080", 99f), sp.getFloat("sonda1440", 99f), sp.getFloat("sondaLeve", 99f))
+    }
+
+    /** Roda em segundo plano; done chega na linha da tela. */
+    fun run(sp: android.content.SharedPreferences, ver: String, done: (() -> Unit)? = null) {
+        if (running) return
+        running = true
+        Thread({
+            val r = try { measure() } catch (e: Throwable) { Result("?", "", 99f, 99f, 99f) }
+            result = r
+            sp.edit().putString("sondaVer", ver).putString("sondaGpu", r.gpu).putString("sondaGl", r.gl).putFloat("sonda1080", r.ms1080).putFloat("sonda1440", r.ms1440).putFloat("sondaLeve", r.msLite).apply()
+            running = false
+            android.os.Handler(android.os.Looper.getMainLooper()).post { PP.rev++; done?.invoke() }
+        }, "diagnostico-imagem").start()
+    }
+
+    private fun measure(): Result {
+        val dpy = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
+        val v = IntArray(2); EGL14.eglInitialize(dpy, v, 0, v, 1)
+        val cfgs = arrayOfNulls<EGLConfig>(1); val n = IntArray(1)
+        EGL14.eglChooseConfig(dpy, intArrayOf(EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT, EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_NONE), 0, cfgs, 0, 1, n, 0)
+        val ctx = EGL14.eglCreateContext(dpy, cfgs[0], EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
+        val surf = EGL14.eglCreatePbufferSurface(dpy, cfgs[0], intArrayOf(EGL14.EGL_WIDTH, 16, EGL14.EGL_HEIGHT, 16, EGL14.EGL_NONE), 0)
+        EGL14.eglMakeCurrent(dpy, surf, surf, ctx)
+        try {
+            val gpu = GLES20.glGetString(GLES20.GL_RENDERER) ?: "?"; val gl = GLES20.glGetString(GLES20.GL_VERSION) ?: ""
+            // quadro de teste 1280x720 com textura variada
+            val sw = 1280; val sh = 720
+            val buf = java.nio.ByteBuffer.allocateDirect(sw * sh * 4)
+            val rnd = java.util.Random(3); val row = ByteArray(sw * 4)
+            for (y in 0 until sh) { rnd.nextBytes(row); buf.put(row) }
+            buf.position(0)
+            val src = tex(sw, sh, buf)
+            fun bench(fs: String, w: Int, h: Int): Float = try {
+                val prog = AiSharpenShaders.program(fs)
+                val dst = tex(w, h, null); val fb = IntArray(1); GLES20.glGenFramebuffers(1, fb, 0)
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fb[0]); GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D, dst, 0)
+                GLES20.glViewport(0, 0, w, h)
+                val draw = { AiSharpenShaders.draw(prog, src, 1f / sw, 1f / sh, 0.5f, 0.45f) }
+                repeat(3) { draw() }; GLES20.glFinish()
+                val t0 = System.nanoTime(); val frames = 20
+                repeat(frames) { draw(); GLES20.glFinish() }
+                val ms = (System.nanoTime() - t0) / 1e6f / frames
+                GLES20.glDeleteFramebuffers(1, fb, 0); GLES20.glDeleteTextures(1, intArrayOf(dst), 0); GLES20.glDeleteProgram(prog)
+                ms
+            } catch (e: Throwable) { 99f }
+            return Result(gpu, gl, bench(AiSharpenShaders.FS, 1920, 1080), bench(AiSharpenShaders.FS_LITE, 2560, 1440), bench(AiSharpenShaders.FS_LITE, 1280, 720))
+        } finally {
+            EGL14.eglMakeCurrent(dpy, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
+            EGL14.eglDestroySurface(dpy, surf); EGL14.eglDestroyContext(dpy, ctx)
+        }
+    }
+
+    private fun tex(w: Int, h: Int, data: java.nio.ByteBuffer?): Int {
+        val t = IntArray(1); GLES20.glGenTextures(1, t, 0); GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, t[0])
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR); GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE); GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, w, h, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, data)
+        return t[0]
     }
 }
 
 /** Reconstrução bicúbica (Catmull-Rom) + nitidez adaptativa (estilo CAS) + tom suave, na GPU. */
 @UnstableApi
-class AiSharpen(private val targetHeight: Int, private val sharp: Float, private val tone: Float) : GlEffect {
+class AiSharpen(private val targetHeight: Int, private val sharp: Float, private val tone: Float, private val lite: Boolean = false) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        AiSharpenProgram(useHdr, targetHeight, sharp, tone)
+        AiSharpenProgram(useHdr, targetHeight, sharp, tone, lite)
 }
 
 @UnstableApi
-private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, private val sharp: Float, private val tone: Float) :
+private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, private val sharp: Float, private val tone: Float, lite: Boolean) :
     BaseGlShaderProgram(useHdr, 1) {
 
     private val program: GlProgram = try {
-        GlProgram(VS, FS).also {
+        GlProgram(AiSharpenShaders.VS, if (lite) AiSharpenShaders.FS_LITE else AiSharpenShaders.FS).also {
             it.setBufferAttribute("aFramePosition", GlUtil.getNormalizedCoordinateBounds(), GlUtil.HOMOGENEOUS_COORDINATE_VECTOR_SIZE)
         }
     } catch (e: GlUtil.GlException) {
@@ -114,9 +202,11 @@ private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, p
             throw VideoFrameProcessingException(e)
         }
     }
+}
 
-    companion object {
-        private const val VS = """
+/** Shaders da reconstrução (também usados pelo diagnóstico). FS_LITE: sem a ampliação bicúbica (leitura bilinear do próprio hardware), ~60% menos leituras. */
+object AiSharpenShaders {
+        const val VS = """
 attribute vec4 aFramePosition;
 varying vec2 vTexSamplingCoord;
 void main() {
@@ -124,7 +214,7 @@ void main() {
   vTexSamplingCoord = vec2(aFramePosition.x * 0.5 + 0.5, aFramePosition.y * 0.5 + 0.5);
 }
 """
-        private const val FS = """
+        const val FS = """
 precision highp float;
 uniform sampler2D uTexSampler;
 uniform vec2 uTexel;
@@ -175,5 +265,23 @@ void main() {
   gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
 }
 """
+    val FS_LITE: String = FS.replace("vec3 c = bicubic(uv);", "vec3 c = tx(uv);")
+
+    fun program(fs: String): Int {
+        fun sh(type: Int, src: String): Int { val x = GLES20.glCreateShader(type); GLES20.glShaderSource(x, src); GLES20.glCompileShader(x); val ok = IntArray(1); GLES20.glGetShaderiv(x, GLES20.GL_COMPILE_STATUS, ok, 0); if (ok[0] == 0) throw RuntimeException(GLES20.glGetShaderInfoLog(x)); return x }
+        val p = GLES20.glCreateProgram(); GLES20.glAttachShader(p, sh(GLES20.GL_VERTEX_SHADER, VS)); GLES20.glAttachShader(p, sh(GLES20.GL_FRAGMENT_SHADER, fs)); GLES20.glLinkProgram(p)
+        return p
+    }
+
+    private val quad: java.nio.FloatBuffer = java.nio.ByteBuffer.allocateDirect(4 * 4 * 4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer().apply { put(floatArrayOf(-1f, -1f, 0f, 1f, 1f, -1f, 0f, 1f, -1f, 1f, 0f, 1f, 1f, 1f, 0f, 1f)); position(0) }
+
+    fun draw(p: Int, tex: Int, tx: Float, ty: Float, sharp: Float, tone: Float) {
+        GLES20.glUseProgram(p)
+        val a = GLES20.glGetAttribLocation(p, "aFramePosition"); GLES20.glEnableVertexAttribArray(a); GLES20.glVertexAttribPointer(a, 4, GLES20.GL_FLOAT, false, 0, quad)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0); GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tex)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(p, "uTexSampler"), 0)
+        GLES20.glUniform2f(GLES20.glGetUniformLocation(p, "uTexel"), tx, ty)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(p, "uSharp"), sharp); GLES20.glUniform1f(GLES20.glGetUniformLocation(p, "uTone"), tone)
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
     }
 }
