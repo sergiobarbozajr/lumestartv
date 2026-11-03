@@ -171,3 +171,25 @@ fun RemotePanel(st: AppState, locked: Boolean) {
     if (KeyMap.msg.isNotBlank()) T(KeyMap.msg, 13, C.a1, FontWeight.SemiBold)
     Btn("Voltar ao padrão", locked = locked) { KeyMap.reset() }
 }
+
+// ---------------- Limpar histórico ----------------
+@Composable
+fun HistoryPanel(st: AppState, locked: Boolean) {
+    Store.rev.let { }
+    var ask by remember { mutableStateOf("") } // pede OK duas vezes antes de apagar
+    T("Apaga o que aparece em \"Visto\" e em \"Continuar assistindo\" na tela inicial. Para tirar um título só, abra o título e use \"Tirar do histórico\". Favoritos da Minha lista não são apagados.", 13, C.muted, lineHeight = 19)
+    KV(listOf("Visto" to "${Store.seen.size} títulos", "Continuar assistindo" to "${Store.progress.size} títulos"))
+    fun confirm(k: String, done: () -> Unit) { if (ask == k) { done(); ask = "" } else ask = k }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Btn(if (ask == "visto") "Aperte OK de novo para apagar o Visto" else "Limpar \"Visto\"", locked = locked, primary = ask == "visto") {
+            confirm("visto") { Store.clearSeen(); st.say("Visto apagado") }
+        }
+        Btn(if (ask == "cont") "Aperte OK de novo para apagar o Continuar" else "Limpar \"Continuar assistindo\"", locked = locked, primary = ask == "cont") {
+            confirm("cont") { Store.clearProgress(); st.say("Continuar assistindo apagado") }
+        }
+        Btn(if (ask == "tudo") "Aperte OK de novo para apagar tudo" else "Limpar todo o histórico", locked = locked, primary = ask == "tudo") {
+            confirm("tudo") { Store.clearSeen(); Store.clearProgress(); st.say("Histórico apagado") }
+        }
+    }
+    T("Ao limpar o \"Continuar assistindo\", os filmes e episódios voltam a começar do início.", 11, C.dim)
+}

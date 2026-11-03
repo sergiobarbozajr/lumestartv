@@ -121,5 +121,19 @@ object Store {
         rev++
     }
 
+    private fun saveProgress() {
+        val o = JSONObject()
+        progress.entries.sortedByDescending { it.value.at }.take(100).forEach { (k, p) -> o.put(k, JSONArray().put(p.pos).put(p.dur).put(p.at)) }
+        sp.edit().putString("progresso", o.toString()).apply()
+    }
+    private fun saveSeen() = sp.edit().putString("vistos", seen.joinToString("\n")).apply()
+
+    /** Limpa a fileira "Visto". */
+    fun clearSeen() { seen.clear(); saveSeen(); rev++ }
+    /** Limpa a fileira "Continuar assistindo" (os vídeos voltam a começar do início). */
+    fun clearProgress() { progress.clear(); saveProgress(); rev++ }
+    /** Tira um título só do histórico (visto e continuar). */
+    fun forget(id: String) { seen.remove(id); progress.remove(id); saveSeen(); saveProgress(); rev++ }
+
     fun setPin(p: String) { adultPin = p; sp.edit().putString("pinAdulto", p).apply() }
 }

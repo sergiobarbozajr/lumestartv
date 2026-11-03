@@ -462,6 +462,7 @@ private val CFG = listOf(
     Cfg("offline", "Canais fora do ar", 1, "Marca ou esconde os canais sem sinal."),
     Cfg("rede", "Rede e internet", 1, "Situação da conexão e teste de velocidade."),
     Cfg("controle", "Mapear controle remoto", 1, "Escolha a tecla do controle para OK, Voltar, Play/Pausa e Favoritar."),
+    Cfg("historico", "Limpar histórico", 1, ""),
     Cfg("adulto", "Conteúdo adulto", 1, "Bloqueio com PIN."),
     Cfg("update", "Atualização do app", 1, ""),
     Cfg("sobre", "Sobre o aparelho", 1, ""),
@@ -575,6 +576,7 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
         "offline" -> OfflinePanel(st, locked)
         "rede" -> NetPanel(st, locked)
         "tmdb" -> TmdbPanel(st, locked)
+        "historico" -> HistoryPanel(st, locked)
         "ai" -> AiImagePanel(st, locked)
         "audio" -> AiAudioPanel(st, locked)
         "tema" -> ThemePanel(st, locked)

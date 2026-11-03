@@ -271,6 +271,7 @@ fun DetailDialog(st: AppState, it: Item) {
                     Box(if (it.kind == SERIES) Modifier.focusRequester(playBtn) else Modifier) {
                         Btn(if (fav) "♥ Na Minha lista" else "♡ Minha lista", locked = locked) { val on = Store.toggleFav(it.id); st.say(if (on) "♥ Adicionado à Minha lista" else "Removido da Minha lista") }
                     }
+                    if (p != null || Store.seen.contains(it.id)) Btn("Tirar do histórico", locked = locked) { Store.forget(it.id); st.say("\"${it.title}\" saiu do Visto e do Continuar assistindo") }
                     Btn("Voltar", locked = locked) { st.detail = null; st.refocus++ }
                 }
                 if (it.kind == SERIES) {
