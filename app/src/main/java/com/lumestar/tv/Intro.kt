@@ -209,18 +209,30 @@ object Space {
         stroke.xfermode = null
     }
 
-    /** Estrelas em lotes (poucas chamadas de desenho por quadro). */
+    /** Estrelas em lotes: 5 brilhos x 2 tamanhos = 10 chamadas de desenho por quadro. */
+    private val starBuf = Array(10) { FloatArray(2400) }
+    private val starN = IntArray(10)
     fun stars(c: Canvas, list: List<IntroPlan.Star>, t: Float, alpha: Float, s: Float, map: (IntroPlan.Star) -> Pair<Float, Float>) {
         if (alpha <= 0.01f) return
-        for (b in 0 until 5) {
-            fill.color = rgba(0xFFFFFF, alpha * (.45f + .55f * (b + .5f) / 5f))
-            for (st in list) {
-                val tw = sin(t * 1.6f + st.p); val lv = (tw * tw * 4.999f).toInt()
-                if (lv != b) continue
-                val (x, y) = map(st)
-                c.drawRect(x, y, x + st.r * s, y + st.r * s, fill)
-            }
+        starN.fill(0)
+        for (st in list) {
+            val tw = sin(t * 1.6f + st.p); val lv = (tw * tw * 4.999f).toInt()
+            val big = if (st.r > .85f) 5 else 0
+            val k = lv + big
+            val n = starN[k]
+            if (n + 2 > starBuf[k].size) continue
+            val (x, y) = map(st)
+            starBuf[k][n] = x; starBuf[k][n + 1] = y; starN[k] = n + 2
         }
+        val old = stroke.strokeCap
+        stroke.strokeCap = Paint.Cap.SQUARE
+        for (k in 0 until 10) {
+            if (starN[k] == 0) continue
+            stroke.strokeWidth = (if (k >= 5) 1.4f else .8f) * s
+            stroke.color = rgba(0xFFFFFF, alpha * (.45f + .55f * ((k % 5) + .5f) / 5f))
+            c.drawPoints(starBuf[k], 0, starN[k], stroke)
+        }
+        stroke.strokeCap = old
     }
 }
 
@@ -260,6 +272,7 @@ fun IntroScreen(soundOn: Boolean, onDone: () -> Unit) {
 }
 
 private fun easeIn(x: Float) = x * x * x
+private val sparkBuf = FloatArray(560 * 4)
 
 private fun drawIntro(c: Canvas, plan: IntroPlan, text: Paint, t: Float, W: Float, H: Float, s: Float, cx: Float, cy: Float) {
     val TB = IntroPlan.TB.toFloat()
@@ -329,11 +342,20 @@ private fun drawIntro(c: Canvas, plan: IntroPlan, text: Paint, t: Float, W: Floa
         val n = k * 60
         val dmp = (1 - 0.982f.pow(n)) / (1 - 0.982f) / 60f
         val dmpPrev = (1 - 0.982f.pow(max(0f, n - 2))) / (1 - 0.982f) / 60f
-        for (sp in plan.sparks) {
-            if (k > sp.life) continue
-            val a = 1 - k / sp.life
-            Space.stroke.strokeWidth = sp.w * s; Space.stroke.color = rgba(sp.col, a)
-            c.drawLine(cx + sp.vx * dmpPrev * s, cy + sp.vy * dmpPrev * s, cx + sp.vx * dmp * s, cy + sp.vy * dmp * s, Space.stroke)
+        for (q in 0 until 4) for (ci in 0 until 5) {
+            var n = 0
+            for ((j, sp) in plan.sparks.withIndex()) {
+                if (j % 5 != ci || k > sp.life) continue
+                val aq = ((1 - k / sp.life) * 3.999f).toInt()
+                if (aq != q || n + 4 > sparkBuf.size) continue
+                sparkBuf[n] = cx + sp.vx * dmpPrev * s; sparkBuf[n + 1] = cy + sp.vy * dmpPrev * s
+                sparkBuf[n + 2] = cx + sp.vx * dmp * s; sparkBuf[n + 3] = cy + sp.vy * dmp * s
+                n += 4
+            }
+            if (n == 0) continue
+            Space.stroke.strokeWidth = (1.2f + q * .5f) * s
+            Space.stroke.color = rgba(plan.sparks[ci].col, (q + .5f) / 4f)
+            c.drawLines(sparkBuf, 0, n, Space.stroke)
         }
         Space.stroke.xfermode = null
         if (k < 1.1f) { Space.fill.color = rgba(0xFFFFFF, max(0f, 1 - k * 1.3f)); c.drawRect(0f, 0f, W, H, Space.fill) }

@@ -87,6 +87,13 @@ jobs:
         with:
           name: teste-capturas
           path: teste/
+      - name: Enviar capturas para o ramo "capturas" (para conferir as telas)
+        if: always()
+        run: |
+          cd teste || exit 0
+          git init -q -b capturas && git add -A
+          git -c user.name=ci -c user.email=ci@lumestar commit -q -m "capturas ${{ github.sha }}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" capturas || true
       - name: Resultado
         if: always()
         run: |

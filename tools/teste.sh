@@ -19,6 +19,7 @@ done
 sleep 4
 shot "inicio"
 adb shell dumpsys gfxinfo $PKG > teste/gfx_abertura.txt 2>&1 || true
+adb shell dumpsys gfxinfo $PKG reset > /dev/null 2>&1 || true
 
 # navegação pelo controle
 key KEYCODE_DPAD_DOWN; key KEYCODE_DPAD_DOWN 1.2
@@ -42,8 +43,10 @@ adb shell dumpsys gfxinfo $PKG > teste/gfx_total.txt 2>&1 || true
 adb logcat -d > teste/logcat.txt 2>&1 || true
 
 {
-  echo "== LumeStarTV no emulador =="
-  grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|99th percentile" teste/gfx_total.txt | head -6
+  echo "== Abertura (desenho pesado, GPU simulada do emulador) =="
+  grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|99th percentile" teste/gfx_abertura.txt | head -5
+  echo "== Menu e navegacao pelo controle =="
+  grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|99th percentile" teste/gfx_total.txt | head -5
 } > teste/resumo.txt
 
 if ! adb shell pidof $PKG > /dev/null; then echo "o app fechou sozinho" >> teste/falhou.txt; fi
