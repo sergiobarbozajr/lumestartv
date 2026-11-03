@@ -108,7 +108,7 @@ object Catalog {
     val episodes = java.util.concurrent.ConcurrentHashMap<String, List<Episode>>()
     val year = Calendar.getInstance().get(Calendar.YEAR)
 
-    fun visible(i: Item) = Store.adultOpen || !i.adult
+    fun visible(i: Item) = (Store.adultOpen || !i.adult) && !(i.kind == LIVE && PP.offlineMode == "ocultar" && i.id in PP.offline)
 
     /** Catálogo já separado e ordenado. Montado em segundo plano, nunca na linha da tela. */
     class Built(val items: List<Item>, val byId: Map<String, Item>, val byTab: Map<String, List<Pair<String, List<Item>>>>)
@@ -139,9 +139,9 @@ object Catalog {
     private val rowsCache = HashMap<String, List<Pair<String, List<Item>>>>()
 
     fun rows(tab: String): List<Pair<String, List<Item>>> {
-        val key = tab + "|" + Store.adultOpen
+        val key = tab + "|" + Store.adultOpen + "|" + PP.offlineMode + PP.offline.size
         return rowsCache.getOrPut(key) {
-            (byTab[tab] ?: emptyList()).map { (g, l) -> g to (if (Store.adultOpen) l else l.filter { visible(it) }) }.filter { it.second.isNotEmpty() }
+            (byTab[tab] ?: emptyList()).map { (g, l) -> g to l.filter { visible(it) } }.filter { it.second.isNotEmpty() }
         }
     }
 

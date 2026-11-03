@@ -17,7 +17,7 @@ object Net {
     fun open(url: String, timeoutRead: Int = 60000): HttpURLConnection {
         var u = url
         repeat(6) {
-            val c = (URL(u).openConnection() as HttpURLConnection).apply {
+            val c = (URL(u).openConnection(PP.proxy()) as HttpURLConnection).apply {
                 connectTimeout = 15000
                 readTimeout = timeoutRead
                 instanceFollowRedirects = false

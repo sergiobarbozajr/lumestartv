@@ -15,6 +15,7 @@ class MainActivity : ComponentActivity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         val prefs = Prefs(this)
         Store.init(this)
+        PP.init(this)
         kotlin.concurrent.thread(name = "catalogo-cache") { Catalog.loadCache(applicationContext) }
         Sfx.enabled = prefs.sounds
         Sfx.setVolume(prefs.volume)

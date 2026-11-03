@@ -441,17 +441,17 @@ class Cfg(val id: String, val name: String, val soon: Int, val desc: String)
 private val CFG = listOf(
     Cfg("contas", "Contas IPTV", 1, "Até 3 contas com URL do servidor, usuário e senha (padrão Xtream Codes). A senha fica guardada criptografada no aparelho."),
     Cfg("listas", "Listas e formatos", 1, ""),
-    Cfg("stream", "Transmissão de rede", 3, "Como o \"Abrir fluxo de rede\" do VLC: 5 endereços salvos, com cache de 300, 1.000 ou 3.000 ms."),
-    Cfg("web", "Endereços de navegador", 3, "Até 5 sites para abrir direto no navegador da TV."),
-    Cfg("proxy", "Proxy", 3, "HTTP, HTTPS ou SOCKS5, com endereço, porta, usuário e senha."),
-    Cfg("video", "Qualidade de vídeo", 3, "Baixa 480p, Média 720p, Alta 1080p ou Ultra 2160p, com a IA segurando a imagem quando a internet oscila."),
+    Cfg("stream", "Transmissão de rede", 1, "Como o \"Abrir fluxo de rede\" do VLC: 5 endereços salvos, com cache de 300, 1.000 ou 3.000 ms."),
+    Cfg("web", "Endereços de navegador", 1, "Até 5 sites para abrir direto no navegador da TV."),
+    Cfg("proxy", "Proxy", 1, "HTTP, HTTPS ou SOCKS5, com endereço, porta, usuário e senha."),
+    Cfg("video", "Qualidade de vídeo", 1, "Baixa 480p, Média 720p, Alta 1080p ou Ultra 2160p, com a IA segurando a imagem quando a internet oscila."),
     Cfg("ai", "Assistente IA de imagem", 4, "Desligada, Automática ou Manual (baixa, média, alta, ultra), dividindo o trabalho entre GPU e CPU."),
     Cfg("audio", "IA de áudio", 4, "Automático, Diálogos nítidos, Cinema e Modo noturno, como no AstroLume."),
     Cfg("tema", "Tema do app", 4, "Cosmos, Aurora, Nebulosa e Solar."),
     Cfg("clima", "Clima e cidade", 4, "Cidade e clima no topo da tela, ao lado do relógio."),
     Cfg("som", "Som do aplicativo", 1, ""),
-    Cfg("offline", "Canais fora do ar", 3, "Marca ou esconde os canais sem sinal."),
-    Cfg("rede", "Rede e internet", 3, "Situação da conexão e teste de velocidade."),
+    Cfg("offline", "Canais fora do ar", 1, "Marca ou esconde os canais sem sinal."),
+    Cfg("rede", "Rede e internet", 1, "Situação da conexão e teste de velocidade."),
     Cfg("controle", "Mapear controle remoto", 4, "Escolha a tecla do controle para OK, Voltar, Play/Pausa e Favoritar."),
     Cfg("adulto", "Conteúdo adulto", 1, "Bloqueio com PIN."),
     Cfg("update", "Atualização do app", 1, ""),
@@ -550,6 +550,12 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
         "listas" -> ListsPanel(st, locked)
         "adulto" -> AdultPanel(st, locked)
         "sobre" -> KV(deviceInfo(ctx))
+        "stream" -> StreamPanel(st, locked)
+        "web" -> WebPanel(st, locked)
+        "proxy" -> ProxyPanel(st, locked)
+        "video" -> VideoPanel(st, locked)
+        "offline" -> OfflinePanel(st, locked)
+        "rede" -> NetPanel(st, locked)
         else -> {
             T(c.desc, 13, C.muted, lineHeight = 19)
             Box(Modifier.clip(RoundedCornerShape(10.dp)).background(C.a2.copy(alpha = .18f)).padding(horizontal = 12.dp, vertical = 7.dp)) {

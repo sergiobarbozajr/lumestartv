@@ -52,10 +52,32 @@ key KEYCODE_DPAD_CENTER 3
 shot "serie_detalhe"
 key KEYCODE_BACK 1.5
 abre --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
-sleep 10
+sleep 5
 shot "reproduzindo_filme"
 key KEYCODE_DPAD_CENTER 1.5
 shot "filme_pausado"
+for i in 1 2 3 4; do key KEYCODE_DPAD_RIGHT 0.4; done
+key KEYCODE_DPAD_CENTER 1.5
+shot "player_painel_imagem"
+key KEYCODE_BACK 1
+for i in 1 2 3; do key KEYCODE_DPAD_RIGHT 0.4; done
+key KEYCODE_DPAD_CENTER 1.5
+shot "player_painel_som"
+key KEYCODE_BACK 1
+key KEYCODE_DPAD_RIGHT 0.4
+key KEYCODE_DPAD_CENTER 1.5
+shot "player_painel_legendas"
+key KEYCODE_BACK 1; key KEYCODE_BACK 1; key KEYCODE_BACK 1.5
+# configurações novas da entrega 3
+abre --es pagina config
+key KEYCODE_DPAD_RIGHT 1
+for i in $(seq 1 12); do key KEYCODE_DPAD_UP 0.3; done
+key KEYCODE_DPAD_DOWN 0.4; key KEYCODE_DPAD_DOWN 1
+shot "config_transmissao"
+for i in 1 2 3; do key KEYCODE_DPAD_DOWN 0.4; done
+sleep 0.6; shot "config_video"
+for i in 1 2 3 4 5 6 7; do key KEYCODE_DPAD_DOWN 0.4; done
+sleep 2; shot "config_rede"
 adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)|PlaybackException" | tail -20 > teste/player_log.txt
 
 adb shell dumpsys gfxinfo $PKG > teste/gfx_total.txt 2>&1 || true

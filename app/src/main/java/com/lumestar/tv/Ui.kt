@@ -105,6 +105,7 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
                 T(it.title, 11, Color.White, FontWeight.Bold, maxLines = 3, lineHeight = 13)
             }
             Img(it.logo, if (wide) 336 else 212, if (wide) 190 else 316, Modifier.fillMaxSize().let { m -> if (wide) m.padding(12.dp) else m }, crop = !wide)
+            if (it.kind == LIVE && it.id in PP.offline) Box(Modifier.align(Alignment.TopStart).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xE0B0203C)).padding(horizontal = 6.dp, vertical = 2.dp)) { T("FORA DO AR", 8, Color.White, FontWeight.Bold) }
             if (fav) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(20.dp).clip(CircleShape).background(Color(0xC8050816)), contentAlignment = Alignment.Center) { T("♥", 11, Color(0xFFFF8FB8), FontWeight.Bold) }
             if (prog != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x55FFFFFF))) {
                 Box(Modifier.fillMaxWidth((prog.pos.toFloat() / prog.dur).coerceIn(0f, 1f)).height(3.dp).background(Brush.horizontalGradient(listOf(C.a1, C.a2))))
