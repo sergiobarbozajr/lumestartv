@@ -57,7 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.C
+import androidx.media3.common.C as MC
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -159,7 +159,7 @@ private fun tracksOf(t: Tracks, type: Int): List<TrackOpt> {
     for (g in t.groups) if (g.type == type) for (i in 0 until g.length) {
         if (!g.isTrackSupported(i)) continue
         val f = g.getTrackFormat(i)
-        val parts = listOf(f.label ?: "", langName(f.language), if (type == C.TRACK_TYPE_AUDIO && f.channelCount > 0) (if (f.channelCount >= 6) "5.1" else if (f.channelCount == 2) "Estéreo" else "${f.channelCount} canais") else "").filter { it.isNotBlank() }.distinct()
+        val parts = listOf(f.label ?: "", langName(f.language), if (type == MC.TRACK_TYPE_AUDIO && f.channelCount > 0) (if (f.channelCount >= 6) "5.1" else if (f.channelCount == 2) "Estéreo" else "${f.channelCount} canais") else "").filter { it.isNotBlank() }.distinct()
         out.add(TrackOpt(parts.joinToString(" · ").ifBlank { "Faixa ${out.size + 1}" }, g, i, g.isTrackSelected(i)))
     }
     return out
@@ -206,7 +206,7 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         }
         if (!subUrl.isNullOrBlank()) {
             val mime = if (subUrl.lowercase().contains(".vtt")) MimeTypes.TEXT_VTT else if (subUrl.lowercase().contains(".ass") || subUrl.lowercase().contains(".ssa")) MimeTypes.TEXT_SSA else MimeTypes.APPLICATION_SUBRIP
-            b.setSubtitleConfigurations(listOf(MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subUrl)).setMimeType(mime).setLanguage("pt").setLabel("Legenda carregada").setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build()))
+            b.setSubtitleConfigurations(listOf(MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subUrl)).setMimeType(mime).setLanguage("pt").setLabel("Legenda carregada").setSelectionFlags(MC.SELECTION_FLAG_DEFAULT).build()))
         }
         return b.build()
     }
@@ -316,9 +316,9 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
             }
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
             override fun onTracksChanged(t: Tracks) {
-                val hadExt = audioUrl != null && tracksOf(tracks, C.TRACK_TYPE_AUDIO).size < tracksOf(t, C.TRACK_TYPE_AUDIO).size
+                val hadExt = audioUrl != null && tracksOf(tracks, MC.TRACK_TYPE_AUDIO).size < tracksOf(t, MC.TRACK_TYPE_AUDIO).size
                 tracks = t
-                if (hadExt) tracksOf(t, C.TRACK_TYPE_AUDIO).lastOrNull()?.let { o ->
+                if (hadExt) tracksOf(t, MC.TRACK_TYPE_AUDIO).lastOrNull()?.let { o ->
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(o.group.mediaTrackGroup, o.index)).build()
                 }
             }
@@ -413,7 +413,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                     if (PP.enhance != "off") "✦ Realce ${ENHANCE[PP.enhance]}" else null,
                     if (PP.preset != "padrao") "☀ ${PRESETS[PP.preset]}" else null,
                     if (PP.audioAi != "off") "♪ ${AUDIO_AI[PP.audioAi]}" else null,
-                    if (tracksOf(tracks, C.TRACK_TYPE_TEXT).any { it.selected }) "CC" else null,
+                    if (tracksOf(tracks, MC.TRACK_TYPE_TEXT).any { it.selected }) "CC" else null,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { badges.forEach { b -> Box(Modifier.clip(RoundedCornerShape(20.dp)).background(Color(0x33FFFFFF)).padding(horizontal = 10.dp, vertical = 4.dp)) { T(b, 10, C.fg, FontWeight.Bold) } } }
             }
@@ -499,15 +499,15 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                     }
                     "legendas" -> {
                         T("CC Legendas", 16, C.fg, FontWeight.Bold)
-                        val subs = tracksOf(tracks, C.TRACK_TYPE_TEXT)
+                        val subs = tracksOf(tracks, MC.TRACK_TYPE_TEXT)
                         val off = subs.none { it.selected }
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             T("LEGENDA", 10, C.muted, FontWeight.Bold)
                             Box(Modifier.focusRequester(panelFocus)) {
-                                Btn("Desligada", on = off, locked = false) { player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build(); touch++ }
+                                Btn("Desligada", on = off, locked = false) { player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, true).build(); touch++ }
                             }
                             subs.forEach { o -> Btn(o.label, on = o.selected, locked = false) {
-                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setOverrideForType(TrackSelectionOverride(o.group.mediaTrackGroup, o.index)).build(); say("Legenda: ${o.label}")
+                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_TEXT, false).setOverrideForType(TrackSelectionOverride(o.group.mediaTrackGroup, o.index)).build(); say("Legenda: ${o.label}")
                             } }
                             if (subs.isEmpty()) T("Este vídeo não traz legendas.", 11, C.dim)
                         }
@@ -521,7 +521,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                     }
                     "audio" -> {
                         T("🗣 Áudio e dublagem", 16, C.fg, FontWeight.Bold)
-                        val auds = tracksOf(tracks, C.TRACK_TYPE_AUDIO)
+                        val auds = tracksOf(tracks, MC.TRACK_TYPE_AUDIO)
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             T("FAIXA DE ÁUDIO", 10, C.muted, FontWeight.Bold)
                             if (auds.isEmpty()) Box(Modifier.focusRequester(panelFocus).focusable()) { T("Carregando faixas…", 12, C.dim) }
