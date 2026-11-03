@@ -88,6 +88,42 @@ abre --es pagina inicio
 shot "tema_aurora_inicio"
 adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)|PlaybackException" | tail -20 > teste/player_log.txt
 
+# lista gigante (como a de um usuário real): 40 mil filmes/séries e 5 mil canais
+python3 - <<'PY'
+import random
+random.seed(7)
+g=["Ação","Comédia","Drama","Terror","Animação","Documentário","Romance","Ficção"]
+with open("grande.m3u","w") as f:
+    f.write("#EXTM3U\n")
+    for i in range(5000):
+        f.write(f'#EXTINF:-1 tvg-logo="" group-title="Canais | {g[i%8]}",Canal {i} HD\nhttp://127.0.0.1:9/live/{i}.m3u8\n')
+    for i in range(40000):
+        y=1980+i%45
+        f.write(f'#EXTINF:-1 tvg-logo="" group-title="Filmes | {g[i%8]}",Filme Teste {i} ({y}) [4K] Dublado\nhttp://127.0.0.1:9/movie/{i}.mp4\n')
+PY
+(python3 -m http.server 8099 > /dev/null 2>&1 &) ; sleep 1
+adb reverse tcp:8099 tcp:8099
+abre --es pagina config
+key KEYCODE_DPAD_RIGHT 1
+for i in $(seq 1 14); do key KEYCODE_DPAD_UP 0.3; done
+sleep 2
+adb forward tcp:8765 tcp:8765
+curl -s -m 15 -d "tipo=lista&nome=Gigante&url=http%3A%2F%2F127.0.0.1%3A8099%2Fgrande.m3u" http://127.0.0.1:8765/ > /dev/null
+sleep 40
+shot "grande_lista"
+adb logcat -c
+abre --es pagina inicio
+sleep 8
+shot "grande_inicio"
+key KEYCODE_DPAD_RIGHT 1; key KEYCODE_DPAD_DOWN 1; key KEYCODE_DPAD_DOWN 1
+shot "grande_navegando"
+abre --es pagina filmes
+sleep 4
+shot "grande_filmes"
+adb logcat -d | grep -E "ANR in|FATAL|Skipped [0-9]{3,} frames" > teste/grande_problemas.txt
+if grep -q "ANR in\|FATAL" teste/grande_problemas.txt; then echo "lista grande: travou ou fechou" >> teste/falhou.txt; cat teste/grande_problemas.txt >> teste/falhou.txt; fi
+adb shell pidof $PKG > /dev/null || echo "lista grande: o app fechou" >> teste/falhou.txt
+
 adb shell dumpsys gfxinfo $PKG > teste/gfx_total.txt 2>&1 || true
 adb logcat -d > teste/logcat.txt 2>&1 || true
 
