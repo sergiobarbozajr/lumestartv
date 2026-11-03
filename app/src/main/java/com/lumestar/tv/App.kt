@@ -291,12 +291,19 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
 @Composable
 private fun TopBar(st: AppState) {
     var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); delay(15000) } }
+    LaunchedEffect(Unit) { var n = 0; while (true) { now = Date(); if (n++ % 8 == 0 && st.prefs.weather) Weather.refresh(st.prefs.city); delay(15000) } }
     val pt = Locale("pt", "BR")
     Row(
         Modifier.fillMaxWidth().padding(top = 16.dp, end = 24.dp).graphicsLayer { alpha = Opening.block(st.openT, 0) },
         horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically
     ) {
+        val w = Weather.now
+        if (w != null && st.prefs.weather && st.prefs.city.isNotBlank()) {
+            T("${w.icon} ${w.temp}°", 15, C.fg, FontWeight.Bold)
+            Spacer(Modifier.width(6.dp))
+            T(w.city, 13, C.muted, FontWeight.SemiBold, maxLines = 1)
+            Spacer(Modifier.width(14.dp))
+        }
         T(SimpleDateFormat("EEE, d 'de' MMM", pt).format(now), 13, C.muted, FontWeight.SemiBold)
         Spacer(Modifier.width(14.dp))
         T(SimpleDateFormat("HH:mm", pt).format(now), 17, C.fg, FontWeight.Bold)
@@ -441,18 +448,19 @@ class Cfg(val id: String, val name: String, val soon: Int, val desc: String)
 private val CFG = listOf(
     Cfg("contas", "Contas IPTV", 1, "Até 3 contas com URL do servidor, usuário e senha (padrão Xtream Codes). A senha fica guardada criptografada no aparelho."),
     Cfg("listas", "Listas e formatos", 1, ""),
+    Cfg("tmdb", "Capas e sinopses (TMDB)", 1, ""),
     Cfg("stream", "Transmissão de rede", 1, "Como o \"Abrir fluxo de rede\" do VLC: 5 endereços salvos, com cache de 300, 1.000 ou 3.000 ms."),
     Cfg("web", "Endereços de navegador", 1, "Até 5 sites para abrir direto no navegador da TV."),
     Cfg("proxy", "Proxy", 1, "HTTP, HTTPS ou SOCKS5, com endereço, porta, usuário e senha."),
     Cfg("video", "Qualidade de vídeo", 1, "Baixa 480p, Média 720p, Alta 1080p ou Ultra 2160p, com a IA segurando a imagem quando a internet oscila."),
-    Cfg("ai", "Assistente IA de imagem", 4, "Desligada, Automática ou Manual (baixa, média, alta, ultra), dividindo o trabalho entre GPU e CPU."),
-    Cfg("audio", "IA de áudio", 4, "Automático, Diálogos nítidos, Cinema e Modo noturno, como no AstroLume."),
-    Cfg("tema", "Tema do app", 4, "Cosmos, Aurora, Nebulosa e Solar."),
-    Cfg("clima", "Clima e cidade", 4, "Cidade e clima no topo da tela, ao lado do relógio."),
+    Cfg("ai", "IA de imagem", 1, "Desligada, Automática ou Manual (baixa, média, alta, ultra), dividindo o trabalho entre GPU e CPU."),
+    Cfg("audio", "IA de áudio", 1, "Automático, Diálogos nítidos, Cinema e Modo noturno, como no AstroLume."),
+    Cfg("tema", "Tema do app", 1, "Cosmos, Aurora, Nebulosa e Solar."),
+    Cfg("clima", "Clima e cidade", 1, "Cidade e clima no topo da tela, ao lado do relógio."),
     Cfg("som", "Som do aplicativo", 1, ""),
     Cfg("offline", "Canais fora do ar", 1, "Marca ou esconde os canais sem sinal."),
     Cfg("rede", "Rede e internet", 1, "Situação da conexão e teste de velocidade."),
-    Cfg("controle", "Mapear controle remoto", 4, "Escolha a tecla do controle para OK, Voltar, Play/Pausa e Favoritar."),
+    Cfg("controle", "Mapear controle remoto", 1, "Escolha a tecla do controle para OK, Voltar, Play/Pausa e Favoritar."),
     Cfg("adulto", "Conteúdo adulto", 1, "Bloqueio com PIN."),
     Cfg("update", "Atualização do app", 1, ""),
     Cfg("sobre", "Sobre o aparelho", 1, ""),
@@ -556,6 +564,12 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
         "video" -> VideoPanel(st, locked)
         "offline" -> OfflinePanel(st, locked)
         "rede" -> NetPanel(st, locked)
+        "tmdb" -> TmdbPanel(st, locked)
+        "ai" -> AiImagePanel(st, locked)
+        "audio" -> AiAudioPanel(st, locked)
+        "tema" -> ThemePanel(st, locked)
+        "clima" -> WeatherPanel(st, locked)
+        "controle" -> RemotePanel(st, locked)
         else -> {
             T(c.desc, 13, C.muted, lineHeight = 19)
             Box(Modifier.clip(RoundedCornerShape(10.dp)).background(C.a2.copy(alpha = .18f)).padding(horizontal = 12.dp, vertical = 7.dp)) {

@@ -72,12 +72,20 @@ key KEYCODE_BACK 1; key KEYCODE_BACK 1; key KEYCODE_BACK 1.5
 abre --es pagina config
 key KEYCODE_DPAD_RIGHT 1
 for i in $(seq 1 12); do key KEYCODE_DPAD_UP 0.3; done
-key KEYCODE_DPAD_DOWN 0.4; key KEYCODE_DPAD_DOWN 1
+key KEYCODE_DPAD_DOWN 0.4; key KEYCODE_DPAD_DOWN 1.5
+shot "config_tmdb"
+key KEYCODE_DPAD_DOWN 1
 shot "config_transmissao"
 for i in 1 2 3; do key KEYCODE_DPAD_DOWN 0.4; done
 sleep 0.6; shot "config_video"
 for i in 1 2 3 4 5 6 7; do key KEYCODE_DPAD_DOWN 0.4; done
 sleep 2; shot "config_rede"
+key KEYCODE_DPAD_UP 0.4; key KEYCODE_DPAD_UP 0.4; key KEYCODE_DPAD_UP 0.4; key KEYCODE_DPAD_UP 0.4
+sleep 1; shot "config_tema"
+key KEYCODE_DPAD_RIGHT 0.5; key KEYCODE_DPAD_RIGHT 0.5; key KEYCODE_DPAD_CENTER 1.5
+shot "tema_aurora_config"
+abre --es pagina inicio
+shot "tema_aurora_inicio"
 adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)|PlaybackException" | tail -20 > teste/player_log.txt
 
 adb shell dumpsys gfxinfo $PKG > teste/gfx_total.txt 2>&1 || true

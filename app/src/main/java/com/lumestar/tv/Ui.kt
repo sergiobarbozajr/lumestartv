@@ -104,7 +104,9 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
                 T(if (it.kind == LIVE) "CANAL" else if (it.kind == SERIES) "SÉRIE" else "FILME", 8, Color.White.copy(alpha = .7f), FontWeight.Bold)
                 T(it.title, 11, Color.White, FontWeight.Bold, maxLines = 3, lineHeight = 13)
             }
-            Img(it.logo, if (wide) 336 else 212, if (wide) 190 else 316, Modifier.fillMaxSize().let { m -> if (wide) m.padding(12.dp) else m }, crop = !wide)
+            Tmdb.rev.let { }
+            val cover = if (it.kind == LIVE) it.logo else Tmdb.poster(it).ifBlank { it.logo }
+            Img(cover, if (wide) 336 else 212, if (wide) 190 else 316, Modifier.fillMaxSize().let { m -> if (wide) m.padding(12.dp) else m }, crop = !wide)
             if (it.kind == LIVE && it.id in PP.offline) Box(Modifier.align(Alignment.TopStart).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xE0B0203C)).padding(horizontal = 6.dp, vertical = 2.dp)) { T("FORA DO AR", 8, Color.White, FontWeight.Bold) }
             if (fav) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(20.dp).clip(CircleShape).background(Color(0xC8050816)), contentAlignment = Alignment.Center) { T("♥", 11, Color(0xFFFF8FB8), FontWeight.Bold) }
             if (prog != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x55FFFFFF))) {
@@ -137,11 +139,17 @@ fun Hero(st: AppState, list: List<HeroEntry>, locked: Boolean) {
     if (list.isEmpty()) return
     var idx by remember(list) { mutableIntStateOf(0) }
     LaunchedEffect(list) { while (true) { delay(10_000); idx = (idx + 1) % list.size } }
-    val e = list[idx % list.size]
+    val e0 = list[idx % list.size]
+    Tmdb.rev.let { }
+    val m = e0.item?.let { Tmdb.meta(it) }
+    val e = if (m == null) e0 else HeroEntry(e0.title, e0.eyebrow,
+        e0.meta.ifBlank { listOf(if (m.year > 0) "${m.year}" else "", if (m.vote > 0) "★ %.1f".format(m.vote) else "").filter { x -> x.isNotBlank() }.joinToString(" · ") },
+        e0.text.ifBlank { m.overview }, m.posterUrl(500).ifBlank { e0.img }, e0.item, null)
+    val bgImg = m?.backdropUrl()?.ifBlank { null } ?: e.img
     val fav = remember(Store.rev, e.item) { e.item?.let { Store.favs.contains(it.id) } ?: false }
     Box(Modifier.fillMaxWidth().height(262.dp).padding(end = 0.dp)) {
         Box(Modifier.fillMaxSize().background(coverBrush(e.title)))
-        Img(e.img, 960, 540, Modifier.fillMaxSize().graphicsLayer { alpha = .5f })
+        Img(bgImg, 960, 540, Modifier.fillMaxSize().graphicsLayer { alpha = if (bgImg != e.img) .62f else .5f })
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xF5050816), .5f to Color(0xB8050816), 1f to Color(0x26050816))))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.55f to Color.Transparent, 1f to C.bg)))
         if (e.img.isNotBlank() && e.item != null && e.item.kind != LIVE) {
@@ -177,7 +185,7 @@ fun heroFrom(items: List<Item>, n: Int = 6): List<HeroEntry> {
         // TV ao vivo: um canal de cada categoria, de preferência com logo
         return items.groupBy { it.group }.values.mapNotNull { g -> g.firstOrNull { it.logo.isNotBlank() } ?: g.firstOrNull() }.take(n).map { heroOf(it) }
     }
-    val withImg = items.filter { it.logo.isNotBlank() && it.kind != LIVE }
+    val withImg = items.filter { it.kind != LIVE && (it.logo.isNotBlank() || Tmdb.poster(it).isNotBlank()) }
     val pool = (if (withImg.size >= 3) withImg else items).sortedWith(compareByDescending<Item> { it.year }.thenBy { it.title.hashCode() })
     return pool.take(n).map { heroOf(it) }
 }

@@ -239,6 +239,9 @@ fun DetailDialog(st: AppState, it: Item) {
     BackHandler(enabled = !locked) { st.detail = null; st.refocus++ }
     val fav = remember(Store.rev) { Store.favs.contains(it.id) }
     val p = remember(Store.rev) { Store.progress[it.id] }
+    Tmdb.rev.let { }
+    val tm = Tmdb.meta(it)
+    LaunchedEffect(tm) { tm?.let { m -> Tmdb.details(m) {} } }
     Box(Modifier.fillMaxSize().background(Color(0xD902040C)), contentAlignment = Alignment.Center) {
         Row(
             Modifier.width(820.dp).height(440.dp).clip(RoundedCornerShape(20.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(20.dp)).padding(22.dp).focusGroup(),
@@ -246,14 +249,18 @@ fun DetailDialog(st: AppState, it: Item) {
         ) {
             Box(Modifier.width(170.dp).height(255.dp).clip(RoundedCornerShape(12.dp)).background(coverBrush(it.title))) {
                 Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.Bottom) { T(it.title, 14, Color.White, FontWeight.Bold) }
-                Img(it.logo, 340, 510, Modifier.fillMaxSize())
+                Img(Tmdb.poster(it).ifBlank { it.logo }, 340, 510, Modifier.fillMaxSize())
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 T((if (it.kind == SERIES) "SÉRIE" else "FILME") + if (it.group.isNotBlank()) " · " + it.group.uppercase() else "", 10, C.a1, FontWeight.Bold, maxLines = 1)
                 T(it.title, 24, C.fg, FontWeight.ExtraBold, maxLines = 2, lineHeight = 28)
-                val meta = listOf(if (it.year > 0) it.year.toString() else "", if (it.rating.isNotBlank() && it.rating != "0") "★ ${it.rating}" else "", if (Store.seen.contains(it.id)) "✓ Visto" else "").filter { s -> s.isNotBlank() }
-                if (meta.isNotEmpty()) T(meta.joinToString(" · "), 12, C.muted, FontWeight.SemiBold)
-                if (it.plot.isNotBlank()) T(it.plot, 13, Color(0xFFC9D1F3), maxLines = if (it.kind == SERIES) 3 else 7, lineHeight = 19)
+                val yr = if (it.year > 0) it.year else tm?.year ?: 0
+                val rate = if (it.rating.isNotBlank() && it.rating != "0") "★ ${it.rating}" else if ((tm?.vote ?: 0.0) > 0) "★ %.1f".format(tm!!.vote) else ""
+                val meta = listOf(if (yr > 0) yr.toString() else "", tm?.cert?.takeIf { c -> c.isNotBlank() }?.let { c -> if (c == "L") "Livre" else "$c anos" } ?: "", rate, if ((tm?.runtime ?: 0) > 0) "${tm!!.runtime} min" else "", tm?.genres?.takeIf { g -> g != "—" } ?: "", if (Store.seen.contains(it.id)) "✓ Visto" else "").filter { s -> s.isNotBlank() }
+                if (meta.isNotEmpty()) T(meta.joinToString(" · "), 12, C.muted, FontWeight.SemiBold, maxLines = 1)
+                val plot = it.plot.ifBlank { tm?.overview ?: "" }
+                if (plot.isNotBlank()) T(plot, 13, Color(0xFFC9D1F3), maxLines = if (it.kind == SERIES) 3 else 6, lineHeight = 19)
+                if (!tm?.cast.isNullOrBlank()) T("Elenco: " + tm!!.cast, 11, C.muted, maxLines = 1)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (it.kind != SERIES) {
                         Box(Modifier.focusRequester(playBtn)) {

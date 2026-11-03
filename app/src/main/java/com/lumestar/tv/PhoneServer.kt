@@ -71,6 +71,7 @@ object PhoneServer {
                 val kv = it.split("=", limit = 2); if (kv.size == 2) URLDecoder.decode(kv[0], "UTF-8") to URLDecoder.decode(kv[1], "UTF-8").trim() else null
             }.toMap()
             val ok = (form["tipo"] == "lista" && form["url"].orEmpty().contains("://")) ||
+                (form["tipo"] == "tmdb" && form["chave"].orEmpty().length >= 20) ||
                 (form["tipo"] == "conta" && form["servidor"].orEmpty().isNotBlank() && form["usuario"].orEmpty().isNotBlank() && form["senha"].orEmpty().isNotBlank())
             msg = if (ok) { main.post { onReceive?.invoke(form) }; "<p class=ok>Enviado! Confira na TV.</p>" } else "<p class=err>Preencha todos os campos.</p>"
         }
@@ -95,5 +96,8 @@ button{font-size:16px;font-weight:700;padding:12px;border:0;border-radius:10px;b
 <form method="post"><h2>Conta IPTV (Xtream)</h2><input type="hidden" name="tipo" value="conta">
 <input name="nome" placeholder="Nome da conta"><input name="servidor" placeholder="URL do servidor (ex.: http://servidor.com:8080)" required>
 <input name="usuario" placeholder="Usuário" required autocapitalize="off"><input name="senha" type="password" placeholder="Senha" required>
-<button>Enviar conta para a TV</button></form></body></html>"""
+<button>Enviar conta para a TV</button></form>
+<form method="post"><h2>Chave do TMDB (capas e sinopses)</h2><input type="hidden" name="tipo" value="tmdb">
+<input name="chave" placeholder="Chave da API do TMDB" required autocapitalize="off" autocomplete="off" spellcheck="false">
+<button>Enviar chave para a TV</button></form></body></html>"""
 }

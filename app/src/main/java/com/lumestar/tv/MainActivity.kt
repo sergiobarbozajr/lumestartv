@@ -16,6 +16,9 @@ class MainActivity : ComponentActivity() {
         val prefs = Prefs(this)
         Store.init(this)
         PP.init(this)
+        Tmdb.init(this)
+        KeyMap.init(prefs)
+        C.pal = THEMES[prefs.theme] ?: C.pal
         Catalog.rev.let { } // cria o catálogo (e seus estados) na linha da tela, antes da linha de fundo
         OfflineScan.running.let { }
         kotlin.concurrent.thread(name = "catalogo-cache") { Catalog.loadCache(applicationContext) }
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
 
     private var createdAt = 0L
     private val pressed = HashSet<Int>()
+    private val swallow = HashSet<Int>()
 
     /**
      * Ao abrir pelo ícone, o "soltar" do OK apertado na tela da TV chega aqui.
@@ -45,6 +49,11 @@ class MainActivity : ComponentActivity() {
         } else if (event.action == KeyEvent.ACTION_UP) {
             if (!pressed.remove(code)) return true
         }
+        // controle remapeado (Configurações › Mapear controle remoto)
+        if (event.action == KeyEvent.ACTION_UP && swallow.remove(code)) return true
+        val mapped = KeyMap.handle(code, event.action == KeyEvent.ACTION_DOWN)
+        if (mapped == null) { if (event.action == KeyEvent.ACTION_DOWN) swallow.add(code); return true }
+        if (mapped != code) return super.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, mapped, event.repeatCount, event.metaState, event.deviceId, event.scanCode, event.flags, event.source))
         val skip = IntroSkip.handler
         if (skip != null) {
             if (event.action == KeyEvent.ACTION_UP) skip()

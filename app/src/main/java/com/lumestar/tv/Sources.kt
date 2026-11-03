@@ -14,7 +14,7 @@ import java.net.URLEncoder
 object Net {
     const val UA = "LumeStarTV/0.2 (Android TV)"
 
-    fun open(url: String, timeoutRead: Int = 60000): HttpURLConnection {
+    fun open(url: String, timeoutRead: Int = 60000, headers: Map<String, String> = emptyMap()): HttpURLConnection {
         var u = url
         repeat(6) {
             val c = (URL(u).openConnection(PP.proxy()) as HttpURLConnection).apply {
@@ -23,6 +23,7 @@ object Net {
                 instanceFollowRedirects = false
                 setRequestProperty("User-Agent", UA)
                 setRequestProperty("Accept-Encoding", "gzip")
+                headers.forEach { (k, v) -> setRequestProperty(k, v) }
             }
             val code = c.responseCode
             if (code in 300..399) {
@@ -40,8 +41,9 @@ object Net {
         return if (c.contentEncoding.equals("gzip", true)) java.util.zip.GZIPInputStream(s) else s
     }
 
-    fun text(url: String, max: Int = 40_000_000): String {
-        val c = open(url)
+    fun text(url: String, max: Int = 40_000_000): String = read(open(url), max)
+
+    fun read(c: HttpURLConnection, max: Int = 40_000_000): String {
         stream(c).use { ins ->
             val out = java.io.ByteArrayOutputStream()
             val buf = ByteArray(65536)

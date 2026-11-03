@@ -135,7 +135,11 @@ fun PhoneBox(st: AppState) {
     val ip = remember { PhoneServer.address() }
     DisposableEffect(Unit) {
         val mine: (Map<String, String>) -> Unit = { f ->
-            if (f["tipo"] == "lista") {
+            if (f["tipo"] == "tmdb") {
+                st.say("Chave do TMDB recebida. Testando…")
+                val k = f["chave"].orEmpty()
+                Tmdb.test(k) { m, ok -> if (ok) { Tmdb.setKey(k); st.say("TMDB ligado. As capas vão aparecendo nas abas.") } else st.say(m) }
+            } else if (f["tipo"] == "lista") {
                 Store.lists.add(ListSrc(f["nome"].orEmpty().ifBlank { "Lista ${Store.lists.size + 1}" }, f["url"].orEmpty())); Store.saveLists()
                 st.say("Lista recebida do celular. Carregando…")
                 Catalog.refresh(ctx) { st.say(it) }
@@ -169,7 +173,7 @@ fun PhoneBox(st: AppState) {
         else {
             T("No celular, conectado ao mesmo Wi-Fi da TV, abra no navegador:", 12, C.muted)
             T("http://$ip:${PhoneServer.PORT}", 20, C.fg, FontWeight.ExtraBold)
-            T("Cole o link da lista ou os dados da conta e toque em Enviar. A TV recebe na hora.", 12, C.muted)
+            T("Cole o link da lista, os dados da conta ou a chave do TMDB e toque em Enviar. A TV recebe na hora.", 12, C.muted)
         }
     }
 }
