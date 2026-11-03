@@ -33,13 +33,13 @@ object PhoneServer {
         users++
         if (server != null) return
         val s = try {
-            ServerSocket().apply { reuseAddress = true; bind(java.net.InetSocketAddress(PORT)) }
+            ServerSocket().apply { reuseAddress = true; bind(java.net.InetSocketAddress(java.net.InetAddress.getByName("0.0.0.0"), PORT)) }
         } catch (e: Exception) { android.util.Log.w("LumeStar", "enviar pelo celular: porta $PORT indisponível", e); return }
         android.util.Log.i("LumeStar", "enviar pelo celular: ouvindo na porta $PORT")
         server = s
         thread(name = "enviar-pelo-celular") {
             while (!s.isClosed) {
-                val c = try { s.accept() } catch (e: Exception) { break }
+                val c = try { s.accept() } catch (e: Exception) { android.util.Log.i("LumeStar", "enviar pelo celular: parou de ouvir (${e.message})"); break }
                 thread { try { handle(c) } catch (e: Exception) {} finally { try { c.close() } catch (e: Exception) {} } }
             }
         }
@@ -48,6 +48,7 @@ object PhoneServer {
     fun stop() {
         users = (users - 1).coerceAtLeast(0)
         if (users > 0) return
+        android.util.Log.i("LumeStar", "enviar pelo celular: desligado")
         try { server?.close() } catch (e: Exception) {}; server = null
     }
 
