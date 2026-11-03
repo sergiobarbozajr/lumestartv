@@ -21,7 +21,9 @@ class MainActivity : ComponentActivity() {
         Sfx.warmUp()
         Tracks.prepare(this)
         createdAt = android.os.SystemClock.uptimeMillis()
-        setContent { LumeApp(prefs) { finish() } }
+        // atalhos para teste (adb): --ez sem_abertura true --es pagina config --es abrir <endereço>
+        val args = LaunchArgs(intent?.getBooleanExtra("sem_abertura", false) ?: false, intent?.getStringExtra("pagina"), intent?.getStringExtra("abrir"))
+        setContent { LumeApp(prefs, args) { finish() } }
     }
 
     private var createdAt = 0L

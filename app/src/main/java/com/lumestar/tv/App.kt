@@ -45,6 +45,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
@@ -202,14 +203,16 @@ object NewsState {
     }
 }
 
+class LaunchArgs(val skipIntro: Boolean = false, val page: String? = null, val url: String? = null)
+
 @Composable
-fun LumeApp(prefs: Prefs, finish: () -> Unit) {
+fun LumeApp(prefs: Prefs, args: LaunchArgs = LaunchArgs(), finish: () -> Unit) {
     val st = remember { AppState(prefs) }
-    var phase by remember { mutableStateOf(if (prefs.intro) "intro" else "open") }
+    var phase by remember { mutableStateOf(if (prefs.intro && !args.skipIntro) "intro" else "open") }
 
     DesignScale {
         Box(Modifier.fillMaxSize().background(C.bg)) {
-            if (phase != "intro") Shell(st, finish)
+            if (phase != "intro") Shell(st, args, finish)
             if (phase == "intro") {
                 Box(Modifier.fillMaxSize()) { IntroScreen(prefs.sounds) { phase = "open" } }
             }
@@ -224,7 +227,7 @@ fun LumeApp(prefs: Prefs, finish: () -> Unit) {
 object IntroSkip { var handler: (() -> Unit)? = null }
 
 @Composable
-private fun Shell(st: AppState, finish: () -> Unit) {
+private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     val ctx = LocalContext.current
     // linha do tempo da abertura pelo buraco de minhoca
     LaunchedEffect(Unit) {
@@ -238,7 +241,9 @@ private fun Shell(st: AppState, finish: () -> Unit) {
             if (st.openT >= Opening.END) break
         }
         st.openT = -1f
-        try { st.navReq["inicio"]?.requestFocus() } catch (e: Exception) {}
+        args.page?.let { p -> if (MENU.any { it.id == p }) st.page = p }
+        try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
+        args.url?.let { u -> st.play(PlayReq("teste:" + u.hashCode(), "Teste de reprodução", u, !u.contains(".mp4"), 0L, "Teste")) }
         NewsState.load()
         Catalog.refresh(ctx)
         Updater.check(ctx) { r ->
@@ -305,18 +310,18 @@ private fun Sidebar(st: AppState, locked: Boolean) {
     val center = with(d) { Offset(480.dp.toPx(), 270.dp.toPx()) }
     Column(
         Modifier.fillMaxHeight().width(w)
-            .drawBehind { drawRect(Brush.horizontalGradient(listOf(Color(0xF2070C26), Color(0xEB050816))), alpha = Opening.block(st.openT, 0)) }
+            .drawBehind { drawRect(Brush.horizontalGradient(if (st.navHasFocus) listOf(Color(0xFF070C26), Color(0xFA050816)) else listOf(Color(0xF2070C26), Color(0xEB050816))), alpha = Opening.block(st.openT, 0)) }
             .onFocusChanged { st.navHasFocus = it.hasFocus }
             .focusGroup()
             .padding(horizontal = 9.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         // logo: só o "L" fechado; "LumeStarTV" com o menu aberto
-        Box(Modifier.height(40.dp).fillMaxWidth().graphicsLayer { alpha = Opening.item(st.openT, 0) }, contentAlignment = Alignment.CenterStart) {
+        Box(Modifier.height(40.dp).fillMaxWidth().clipToBounds().graphicsLayer { alpha = Opening.item(st.openT, 0) }, contentAlignment = Alignment.CenterStart) {
             val logo = TextStyle(fontFamily = F.logo, fontSize = 30.sp)
             Box(Modifier.padding(start = 8.dp)) {
                 GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo)
-                GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo, Modifier.offset(y = 25.dp).graphicsLayer { scaleY = -1f; alpha = .28f })
+                GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo, Modifier.offset(y = 24.dp).graphicsLayer { scaleY = -1f; alpha = .22f })
             }
         }
         Spacer(Modifier.height(4.dp))

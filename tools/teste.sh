@@ -20,38 +20,33 @@ done
 sleep 5
 shot "inicio_vazio"
 adb shell dumpsys gfxinfo $PKG reset > /dev/null 2>&1 || true
+abre() { adb shell am force-stop $PKG; adb shell am start -n $PKG/.MainActivity --ez sem_abertura true "$@" > /dev/null; sleep 6; }
 
-# Configurações (15 para baixo a partir do Início) e entra em Contas IPTV: liga o "Enviar pelo celular"
-for i in $(seq 1 15); do key KEYCODE_DPAD_DOWN 0.5; done
-sleep 1.5
+# "Enviar pelo celular": abre Configurações › Contas IPTV (liga a página na rede) e envia a lista de teste
+abre --es pagina config
 key KEYCODE_DPAD_RIGHT 2
 shot "config_contas"
 adb forward tcp:8765 tcp:8765
-curl -s -m 15 -d "tipo=lista&nome=Lista+de+teste&url=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$LISTA")" http://127.0.0.1:8765/ > teste/celular_resposta.html || echo "sem resposta" > teste/celular_resposta.html
+URLQ=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$LISTA")
+curl -s -m 15 -d "tipo=lista&nome=Lista+de+teste&url=$URLQ" http://127.0.0.1:8765/ > teste/celular_resposta.html || echo "sem resposta" > teste/celular_resposta.html
 grep -q "Enviado" teste/celular_resposta.html && echo "celular: enviado" >> teste/resumo_extra.txt || echo "celular: FALHOU" >> teste/resumo_extra.txt
 sleep 20
 shot "lista_recebida"
 
-# volta ao menu e vai para TV ao vivo (2 para baixo a partir do Início)
-key KEYCODE_BACK 1
-for i in $(seq 1 13); do key KEYCODE_DPAD_UP 0.5; done
-sleep 2
-shot "aovivo"
-key KEYCODE_DPAD_RIGHT 1
+for p in inicio aovivo filmes series lancamentos lista pesquisa; do abre --es pagina $p; shot "pagina_$p"; done
+abre --es pagina aovivo
+key KEYCODE_DPAD_RIGHT 1.5
 shot "aovivo_foco"
 key KEYCODE_DPAD_CENTER 1
 sleep 14
-shot "reproduzindo"
-adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)" | tail -20 > teste/player_log.txt
+shot "reproduzindo_canal"
 key KEYCODE_BACK 2
-# filmes (6 a partir do Início = 4 abaixo de TV ao vivo)
-key KEYCODE_BACK 1
-for i in $(seq 1 4); do key KEYCODE_DPAD_DOWN 0.5; done
-sleep 3
-shot "filmes"
-key KEYCODE_DPAD_RIGHT 1
-key KEYCODE_DPAD_DOWN 1
-shot "filmes_fileiras"
+abre --es abrir "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+sleep 10
+shot "reproduzindo_filme"
+key KEYCODE_DPAD_CENTER 1.5
+shot "filme_pausado"
+adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)|PlaybackException" | tail -20 > teste/player_log.txt
 
 adb shell dumpsys gfxinfo $PKG > teste/gfx_total.txt 2>&1 || true
 adb logcat -d > teste/logcat.txt 2>&1 || true
