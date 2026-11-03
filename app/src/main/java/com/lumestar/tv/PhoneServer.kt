@@ -28,7 +28,10 @@ object PhoneServer {
 
     fun start() {
         if (server != null) return
-        val s = try { ServerSocket(PORT) } catch (e: Exception) { return }
+        val s = try {
+            ServerSocket().apply { reuseAddress = true; bind(java.net.InetSocketAddress(PORT)) }
+        } catch (e: Exception) { android.util.Log.w("LumeStar", "enviar pelo celular: porta $PORT indisponível", e); return }
+        android.util.Log.i("LumeStar", "enviar pelo celular: ouvindo na porta $PORT")
         server = s
         thread(name = "enviar-pelo-celular") {
             while (!s.isClosed) {

@@ -28,7 +28,10 @@ key KEYCODE_DPAD_RIGHT 2
 shot "config_contas"
 adb forward tcp:8765 tcp:8765
 URLQ=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$LISTA")
-curl -s -m 15 -d "tipo=lista&nome=Lista+de+teste&url=$URLQ" http://127.0.0.1:8765/ > teste/celular_resposta.html || echo "sem resposta" > teste/celular_resposta.html
+for t in 1 2 3; do
+  curl -s -m 15 -d "tipo=lista&nome=Lista+de+teste&url=$URLQ" http://127.0.0.1:8765/ > teste/celular_resposta.html && grep -q "Enviado" teste/celular_resposta.html && break
+  echo "tentativa $t sem resposta" >> teste/celular_tentativas.txt; adb shell netstat -ltn 2>/dev/null | grep 8765 >> teste/celular_tentativas.txt; sleep 4
+done
 grep -q "Enviado" teste/celular_resposta.html && echo "celular: enviado" >> teste/resumo_extra.txt || echo "celular: FALHOU" >> teste/resumo_extra.txt
 sleep 20
 shot "lista_recebida"
@@ -46,7 +49,7 @@ key KEYCODE_DPAD_RIGHT 1.2
 key KEYCODE_DPAD_CENTER 3
 shot "serie_detalhe"
 key KEYCODE_BACK 1.5
-abre --es abrir "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+abre --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
 sleep 10
 shot "reproduzindo_filme"
 key KEYCODE_DPAD_CENTER 1.5
@@ -60,6 +63,8 @@ adb logcat -d > teste/logcat.txt 2>&1 || true
   echo "== Navegacao pelo controle (GPU simulada do emulador) =="
   grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|99th percentile" teste/gfx_total.txt | head -5
   cat teste/resumo_extra.txt 2>/dev/null
+  grep -h "LumeStar" teste/logcat.txt | tail -5
+  cat teste/celular_tentativas.txt 2>/dev/null
 } > teste/resumo.txt
 
 if ! adb shell pidof $PKG > /dev/null; then echo "o app fechou sozinho" >> teste/falhou.txt; fi
