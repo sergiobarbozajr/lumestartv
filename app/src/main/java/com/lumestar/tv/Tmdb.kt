@@ -39,12 +39,16 @@ object Tmdb {
     @Volatile private var dirty = false
     @Volatile private var keyBad = false
 
-    var key: String = ""
+    /** chave do usuário (Configurações) ou, se não houver, a chave padrão do app */
+    var userKey: String = ""
         private set
+    val key: String get() = userKey.ifBlank { BuildConfig.TMDB_KEY }
+    private var testKey: String? = null
+    private val useKey get() = testKey ?: key
 
     fun init(c: Context) {
         sp = c.getSharedPreferences("lumestar-tmdb", Context.MODE_PRIVATE)
-        key = Secret.dec(sp.getString("chave", "") ?: "")
+        userKey = Secret.dec(sp.getString("chave", "") ?: "")
         file = File(c.filesDir, "tmdb.json")
         Thread {
             try {
@@ -61,8 +65,8 @@ object Tmdb {
     val count get() = cache.values.count { it.tid > 0 }
 
     fun setKey(k: String) {
-        key = k.trim(); keyBad = false
-        sp.edit().putString("chave", Secret.enc(key)).apply()
+        userKey = k.trim(); keyBad = false
+        sp.edit().putString("chave", Secret.enc(userKey)).apply()
         cache.entries.removeIf { it.value.tid == 0 } // tenta de novo o que não tinha achado
         rev++
     }
@@ -91,9 +95,10 @@ object Tmdb {
     fun poster(it: Item): String = meta(it)?.posterUrl() ?: ""
 
     private fun get(path: String): JSONObject {
-        val bearer = key.length > 40
-        val url = "https://api.themoviedb.org/3/$path" + (if (path.contains('?')) "&" else "?") + "language=pt-BR" + (if (bearer) "" else "&api_key=$key")
-        val c = Net.open(url, 15000, if (bearer) mapOf("Authorization" to "Bearer $key", "Accept" to "application/json") else emptyMap())
+        val k = useKey
+        val bearer = k.length > 40
+        val url = "https://api.themoviedb.org/3/$path" + (if (path.contains('?')) "&" else "?") + "language=pt-BR" + (if (bearer) "" else "&api_key=$k")
+        val c = Net.open(url, 15000, if (bearer) mapOf("Authorization" to "Bearer $k", "Accept" to "application/json") else emptyMap())
         return JSONObject(Net.read(c))
     }
 
@@ -156,14 +161,13 @@ object Tmdb {
     /** Testa a chave com uma busca simples. */
     fun test(k: String, cb: (String, Boolean) -> Unit) {
         Thread {
-            val old = key
             val r = try {
-                key = k.trim()
+                testKey = k.trim()
                 val o = get("search/movie?query=" + URLEncoder.encode("Matrix", "UTF-8"))
                 "Chave aceita · " + (o.optJSONArray("results")?.length() ?: 0) + " resultados de teste" to true
             } catch (e: Throwable) {
                 (if (e.message?.contains("401") == true) "Chave recusada pelo TMDB. Confira se copiou a \"Chave da API\" inteira." else "Falhou: " + Net.why(e)) to false
-            } finally { key = old }
+            } finally { testKey = null }
             main.post { cb(r.first, r.second) }
         }.start()
     }

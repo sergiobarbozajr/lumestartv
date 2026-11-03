@@ -33,18 +33,18 @@ fun TmdbPanel(st: AppState, locked: Boolean) {
     var good by remember { mutableStateOf(false) }
     T("Busca capa, imagem de fundo, sinopse, nota, gêneros, elenco e classificação indicativa dos filmes e séries da sua lista no TMDB (themoviedb.org). Precisa de uma chave grátis criada por você no site do TMDB.", 13, C.muted, lineHeight = 19)
     KV(listOf(
-        "Chave" to if (Tmdb.key.isBlank()) "não colocada" else "colocada (" + Tmdb.key.take(4) + "…)",
+        "Chave" to if (Tmdb.userKey.isNotBlank()) "sua (" + Tmdb.userKey.take(4) + "…)" else if (Tmdb.key.isNotBlank()) "padrão do app" else "não colocada",
         "Situação" to if (Tmdb.on) "Ligado" else if (Tmdb.key.isBlank()) "Desligado" else "Chave recusada",
         "Títulos com capa" to "${Tmdb.count}",
     ))
-    FieldRow(st, "Chave da API", Tmdb.key, locked, secret = true, hint = "32 letras e números") { k ->
+    FieldRow(st, "Chave da API", Tmdb.userKey, locked, secret = true, hint = "32 letras e números") { k ->
         status = "Testando a chave…"; good = false
         Tmdb.test(k) { msg, ok -> status = msg; good = ok; if (ok) { Tmdb.setKey(k); st.say("TMDB ligado. As capas vão aparecendo nas abas.") } }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (Tmdb.key.isNotBlank()) Btn("Testar de novo", locked = locked, primary = true) { status = "Testando…"; Tmdb.test(Tmdb.key) { m, ok -> status = m; good = ok } }
         Btn("Buscar capas de novo", locked = locked) { Tmdb.clear(); st.say("Capas apagadas. Elas voltam conforme você navega.") }
-        if (Tmdb.key.isNotBlank()) Btn("Remover chave", locked = locked) { Tmdb.setKey(""); status = "" }
+        if (Tmdb.userKey.isNotBlank()) Btn("Usar a chave padrão", locked = locked) { Tmdb.setKey(""); status = "" }
     }
     if (status.isNotBlank()) T(status, 13, if (good) C.ok else if (status.endsWith("…")) C.muted else C.bad, FontWeight.SemiBold)
     if (Tmdb.status.isNotBlank()) T(Tmdb.status, 12, C.bad)

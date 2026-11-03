@@ -11,8 +11,10 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 14
-        versionName = "0.4.0"
+        versionCode = 15
+        versionName = "0.4.1"
+        // chave padrão do TMDB: vem do segredo TMDB_KEY do GitHub na hora de compilar (nunca fica no código)
+        buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() } + "\"")
     }
 
     signingConfigs {
@@ -43,6 +45,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
         buildConfig = true
     }
