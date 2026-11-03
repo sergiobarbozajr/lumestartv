@@ -51,7 +51,10 @@ object PP {
     var enhance by StrP("realce", "auto")      // off | auto | baixa | media | alta | ultra
     var quality by StrP("qualidade", "auto")
     var aiUp by StrP("reforcoIa", "auto")      // auto | 1440 | 1080 | off
-    var matchHz by BoolP("frequenciaTela", true)   // auto | 480 | 720 | 1080 | 2160
+    var matchHz by BoolP("frequenciaTela", true)
+    var avMs by IntP("sincroniaMs", 0)          // + atrasa o som, − adianta
+    var sharpLevel by StrP("nitidez", "forte")  // suave | media | forte | max
+    var panel by StrP("painel", "auto")        // auto | hva | outro   // auto | 480 | 720 | 1080 | 2160
     // tela
     var fit by IntP("telaModo", 0)              // 0 original · 1 preencher · 2 zoom
     var fitV by IntP("telaVertical", 0)

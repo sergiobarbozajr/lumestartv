@@ -50,24 +50,40 @@ object ImageAi {
      * mode: "auto" (a IA decide), "1440", "1080" ou "off". cap: limite do disjuntor neste vídeo.
      * compare: o botão Comparar está mostrando o original.
      */
+    /** Intensidade da nitidez: (força do CAS, reforço de detalhe). */
+    fun level(): Pair<Float, Float> = when (PP.sharpLevel) { "suave" -> 0.35f to 0f; "media" -> 0.6f to 0.25f; "max" -> 1f to 0.85f; else -> 0.85f to 0.5f }
+
+    /** Painel HVA (VA) da TCL: escolhido sozinho em TVs TCL quando o perfil está em Automático. */
+    val tclPanel: Boolean by lazy { (android.os.Build.MANUFACTURER + " " + android.os.Build.BRAND).lowercase().contains("tcl") }
+    fun panelHva(): Boolean = when (PP.panel) { "hva" -> true; "outro" -> false; else -> tclPanel }
+
+    /**
+     * mode: "auto" (a IA decide), "1440", "1080" ou "off". cap: limite do disjuntor neste vídeo.
+     * compare: tela dividida (esquerda original, direita com IA).
+     */
     fun plan(mode: String, f: Format?, cap: Int, compare: Boolean): Plan {
-        if (mode == "off" || compare) return Plan("off", emptyList(), if (compare) "Original (comparando)" else "", 0, 0)
+        val (sh, dt) = level(); val pn = if (panelHva()) 1f else 0f; val sp = if (compare) 0.5f else 0f
+        fun fx(target: Int, lite: Boolean, tone: Float) = listOf(AiSharpen(target, sh, tone, lite, dt, sp, pn))
         val h = f?.height ?: 0; val w = f?.width ?: 0
         val hdr = f?.colorInfo?.let { it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 || it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG } ?: false
         if (hdr) return Plan("hdr", emptyList(), if (hwAi) "IA da TV · HDR" else "HDR original", 0, 0)
         if (h <= 0) return Plan("wait", emptyList(), "", 0, 0)
+        val tag = (if (compare) "c" else "") + PP.sharpLevel + pn
+        if (mode == "off") return if (compare) Plan("off$tag", fx(0, true, 0.4f), "Comparando: original | IA", 0, h) else Plan("off", emptyList(), "", 0, 0)
         val want = when (mode) { "1440" -> 2; "1080" -> 1; else -> maxTier() }
         val tier = minOf(want, cap, if (mode == "auto") maxTier() else 2)
         val src = "${h}p"
-        return when {
-            tier >= 2 && h < 1400 -> Plan("u1440", listOf(AiSharpen(1440, 0.5f, 0.45f, lite = true)), "IA $src→1440p" + if (hwAi) " + IA da TV" else "", 2, 1440)
-            tier >= 1 && h < 900 && w < 1600 -> Plan("u1080", listOf(AiSharpen(1080, 0.55f, 0.5f)), "IA $src→1080p" + if (hwAi) " + IA da TV" else "", 1, 1080)
-            tier >= 1 && !hwAi && h <= 1100 -> Plan("sharp", listOf(AiSharpen(0, 0.4f, 0.4f, lite = true)), "IA · nitidez $src", 1, h)
-            // modo leve: sem reforço na placa; com IA no chip, ela faz o 4K; sem, nitidez leve na resolução original se couber
+        val chipTv = if (hwAi) " + IA da TV" else ""
+        val p = when {
+            tier >= 2 && h < 1400 -> Plan("u1440$tag", fx(1440, true, 0.45f), "IA $src→1440p$chipTv", 2, 1440)
+            tier >= 1 && h < 900 && w < 1600 -> Plan("u1080$tag", fx(1080, false, 0.5f), "IA $src→1080p$chipTv", 1, 1080)
+            tier >= 1 && h <= 1100 -> Plan("sharp$tag", fx(0, true, 0.4f), "IA · nitidez $src$chipTv", 1, h)
+            (GpuProbe.result?.msLite ?: 99f) < 14f -> Plan("lite$tag", fx(0, true, 0.35f), "IA leve · nitidez $src$chipTv", 0, h)
             hwAi -> Plan("pass", emptyList(), "IA da TV · 4K", 0, h)
-            (GpuProbe.result?.msLite ?: 99f) < 14f -> Plan("lite", listOf(AiSharpen(0, 0.35f, 0.35f, lite = true)), "IA leve · nitidez $src", 0, h)
             else -> Plan("none", emptyList(), "Modo leve", 0, h)
         }
+        return if (compare && p.effects.isEmpty()) Plan("cmp$tag", fx(0, true, 0.4f), "Comparando: original | IA", p.tier, h)
+        else if (compare) Plan(p.key, p.effects, "Comparando: original | " + p.label, p.tier, p.outH) else p
     }
 }
 
@@ -152,13 +168,13 @@ object GpuProbe {
 
 /** Reconstrução bicúbica (Catmull-Rom) + nitidez adaptativa (estilo CAS) + tom suave, na GPU. */
 @UnstableApi
-class AiSharpen(private val targetHeight: Int, private val sharp: Float, private val tone: Float, private val lite: Boolean = false) : GlEffect {
+class AiSharpen(private val targetHeight: Int, private val sharp: Float, private val tone: Float, private val lite: Boolean = false, private val detail: Float = 0f, private val split: Float = 0f, private val panel: Float = 0f) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        AiSharpenProgram(useHdr, targetHeight, sharp, tone, lite)
+        AiSharpenProgram(useHdr, targetHeight, sharp, tone, lite, detail, split, panel)
 }
 
 @UnstableApi
-private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, private val sharp: Float, private val tone: Float, lite: Boolean) :
+private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, private val sharp: Float, private val tone: Float, lite: Boolean, private val detail: Float, private val split: Float, private val panel: Float) :
     BaseGlShaderProgram(useHdr, 1) {
 
     private val program: GlProgram = try {
@@ -186,6 +202,9 @@ private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, p
             program.setSamplerTexIdUniform("uTexSampler", inputTexId, 0)
             program.setFloatsUniform("uTexel", texel)
             program.setFloatUniform("uSharp", sharp)
+            program.setFloatUniform("uDetail", detail)
+            program.setFloatUniform("uSplit", split)
+            program.setFloatUniform("uPanel", panel)
             program.setFloatUniform("uTone", tone)
             program.bindAttributesAndUniforms()
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -220,6 +239,9 @@ uniform sampler2D uTexSampler;
 uniform vec2 uTexel;
 uniform float uSharp;
 uniform float uTone;
+uniform float uDetail;
+uniform float uSplit;
+uniform float uPanel;
 varying vec2 vTexSamplingCoord;
 
 vec3 tx(vec2 p) { return texture2D(uTexSampler, p).rgb; }
@@ -255,14 +277,26 @@ void main() {
   vec3 mn = min(c, min(min(n, s), min(e, w)));
   vec3 mx = max(c, max(max(n, s), max(e, w)));
   vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(0.0001)), 0.0, 1.0));
-  vec3 wt = -amp * mix(0.125, 0.2, uSharp);
+  vec3 wt = -amp * mix(0.125, 0.24, clamp(uSharp, 0.0, 1.0));
   vec3 o = clamp((c + (n + s + e + w) * wt) / (1.0 + 4.0 * wt), 0.0, 1.0);
+  // reforço de detalhe sem halo: realce local limitado à faixa dos vizinhos (+3%)
+  float yl = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float dk = uPanel > 0.5 ? smoothstep(0.02, 0.18, yl) : 1.0; // painel HVA: menos realce nas sombras
+  vec3 bl = (n + s + e + w) * 0.25;
+  o = clamp(o + (o - bl) * uDetail * dk, mn - 0.03, mx + 0.03);
   // tom suave: um pouco mais de contraste no meio e sombras levemente abertas
   float y = dot(o, vec3(0.2126, 0.7152, 0.0722));
   vec3 sc = o * o * (3.0 - 2.0 * o);
   o = mix(o, sc, uTone * 0.22);
   o += uTone * 0.035 * (1.0 - o) * (1.0 - smoothstep(0.0, 0.35, y));
-  gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
+  // painel HVA (VA): sobe de leve o quase-preto (menos rastro escuro e sombras com detalhe)
+  if (uPanel > 0.5) o = o * 0.975 + 0.025 * (1.0 - smoothstep(0.0, 0.25, o));
+  vec3 res = clamp(o, 0.0, 1.0);
+  if (uSplit > 0.0) {
+    if (uv.x < uSplit) res = tx(uv);
+    if (abs(uv.x - uSplit) < uTexel.x * 1.2) res = vec3(1.0);
+  }
+  gl_FragColor = vec4(res, 1.0);
 }
 """
     val FS_LITE: String = FS.replace("vec3 c = bicubic(uv);", "vec3 c = tx(uv);")

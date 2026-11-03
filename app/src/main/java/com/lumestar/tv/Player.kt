@@ -70,6 +70,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -100,6 +101,8 @@ val AUDIO_AI = linkedMapOf("off" to "Desligado", "auto" to "Automático", "dialo
 val EQS = linkedMapOf("padrao" to "Padrão", "voz" to "Voz", "filme" to "Filme", "musica" to "Música", "esporte" to "Esporte", "noturno" to "Noturno")
 private val EQ_V = mapOf("padrao" to intArrayOf(0, 0, 0), "voz" to intArrayOf(-3, 4, 1), "filme" to intArrayOf(4, 0, 2), "musica" to intArrayOf(3, 0, 3), "esporte" to intArrayOf(1, 2, 3), "noturno" to intArrayOf(-4, 2, 0))
 val FITS = listOf("Original", "Preencher (sem faixas)", "Zoom 120%")
+val SHARP = linkedMapOf("suave" to "Suave", "media" to "Média", "forte" to "Forte", "max" to "Máxima")
+val PANELS = linkedMapOf("auto" to "Automático", "hva" to "HVA / VA (TCL)", "outro" to "IPS / OLED / outro")
 val AI_UP = linkedMapOf("auto" to "Automática (IA decide)", "1440" to "Ultra 1440p", "1080" to "Alta 1080p", "off" to "Desligada")
 val QUALITY = linkedMapOf("auto" to "Automática", "480" to "480p", "720" to "720p", "1080" to "1080p", "2160" to "2160p")
 
@@ -172,6 +175,7 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
     val ds: DefaultDataSource.Factory
     val msf: DefaultMediaSourceFactory
     val player: ExoPlayer
+    val avDelay = AvDelay()
     init {
         val b = OkHttpClient.Builder().proxy(PP.proxy()).followRedirects(true).followSslRedirects(true)
             .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
@@ -184,7 +188,16 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         msf = DefaultMediaSourceFactory(ds)
         val cache = cacheMs.coerceIn(300, 10000)
         val load = DefaultLoadControl.Builder().setBufferDurationsMs(maxOf(15000, cache * 3), 50000, cache, maxOf(1000, cache * 2)).build()
-        player = ExoPlayer.Builder(ctx).setMediaSourceFactory(msf).setLoadControl(load).build()
+        val rf = object : DefaultRenderersFactory(ctx) {
+            override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
+                androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf<androidx.media3.common.audio.AudioProcessor>(avDelay))
+                    .build()
+        }
+        avDelay.targetMs = PP.avMs
+        player = ExoPlayer.Builder(ctx, rf).setMediaSourceFactory(msf).setLoadControl(load).build()
         applyQuality()
     }
 
@@ -254,6 +267,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
     var osdId by remember { mutableIntStateOf(0) }
     var wantPlay by remember { mutableIntStateOf(1) }
     var aiLabel by remember { mutableStateOf("") }
+    var cmpOn by remember { mutableStateOf(false) }
     // estado da IA de imagem neste vídeo: cap = limite do disjuntor (2 Ultra, 1 Alta, 0 sem reforço)
     val ai = remember { object { var key = ""; var cap = 2; var hadFx = false; var compare = false; var lost = 0L; var stable = 0; var tier = 0; var outH = 0; var hot = 0; var bestOn = false; var buffered = false; val hist = LongArray(10); var idx = 0 } }
     val rootFocus = remember { FocusRequester() }
@@ -370,6 +384,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
         val l = object : Player.Listener {
             override fun onPlaybackStateChanged(s: Int) {
                 buffering = s == Player.STATE_BUFFERING
+                if (s == Player.STATE_BUFFERING && dur >= 0 && pos > 0) PlayerDiag.rebuffers++
                 if (s == Player.STATE_READY) { err = null; dur = player.duration.coerceAtLeast(0); matchRate() }
                 if (s == Player.STATE_ENDED && !req.live) { save(); st.closePlayer() }
             }
@@ -389,6 +404,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                 val bad = e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                 if (bad && !triedVlc) { triedVlc = true; eng.ok.setUserAgent(UA_VLC); startAt = player.currentPosition; attempt++; return }
                 if (req.live && !triedTs && url.contains(".m3u8") && req.ext == "ts") { triedTs = true; url = url.replace(".m3u8", ".ts"); attempt++; return }
+                PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' '); PlayerDiag.lastTitle = req.title; PlayerDiag.lastAt = System.currentTimeMillis()
                 err = "Não foi possível reproduzir (${e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')})."
                 wait = 30
             }
@@ -399,6 +415,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
             (ctx as? android.app.Activity)?.window?.let { w -> if (w.attributes.preferredDisplayModeId != 0) w.attributes = w.attributes.also { it.preferredDisplayModeId = 0 } }
         }
     }
+    LaunchedEffect(Unit) { PlayerDiag.rebuffers = 0; PlayerDiag.lastTitle = req.title }
     LaunchedEffect(url, attempt, subUrl, audioUrl) { eng.load(url, subUrl, audioUrl, if (req.live) 0L else startAt) }
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }
     LaunchedEffect(Unit) {
@@ -462,6 +479,10 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                 T(if (wait > 0) "Nova tentativa em $wait s. Aperte Voltar para sair." else "Tentando de novo…", 13, C.muted)
             }
         }
+        if (cmpOn) {
+            Box(Modifier.align(Alignment.TopStart).padding(start = 40.dp, top = 74.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xCC000000)).padding(horizontal = 10.dp, vertical = 5.dp)) { T("ORIGINAL", 12, Color.White, FontWeight.ExtraBold) }
+            Box(Modifier.align(Alignment.TopEnd).padding(end = 40.dp, top = 74.dp).clip(RoundedCornerShape(8.dp)).background(C.a1.copy(alpha = .85f)).padding(horizontal = 10.dp, vertical = 5.dp)) { T("COM IA", 12, Color(0xFF050816), FontWeight.ExtraBold) }
+        }
         if (osd.isNotEmpty()) Box(Modifier.align(Alignment.TopCenter).padding(top = 90.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xDD050816)).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 9.dp)) { T(osd, 13, C.fg, FontWeight.Bold) }
 
         if (showUi || !playing) {
@@ -508,7 +529,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                     Box(Modifier.width(44.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x33FFFFFF))) { Box(Modifier.fillMaxWidth(vol).fillMaxHeight().background(Color.White)) }
                     Btn("+", locked = false) { vol = (vol + .1f).coerceAtMost(1f); player.volume = vol; say("Volume ${(vol * 100).toInt()}") }
                     Spacer(Modifier.width(4.dp))
-                    listOf("imagem" to "☀ Imagem", "tela" to "⛶ Tela", "som" to "♪ Som", "legendas" to "CC Legendas", "audio" to "🗣 Áudio").forEach { (k, l) ->
+                    listOf("imagem" to "☀ Imagem", "tela" to "⛶ Tela", "som" to "♪ Som", "legendas" to "CC Legendas", "audio" to "🗣 Áudio", "sync" to "⏱ Sincronia").forEach { (k, l) ->
                         Btn(l, on = panel == k, locked = false) { panel = if (panel == k) null else k }
                     }
                     Spacer(Modifier.weight(1f))
@@ -535,7 +556,9 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                             Stepper("Cor (saturação)", PP.sat, "") { d -> PP.sat = (PP.sat + d * 5).coerceIn(-50, 50) }
                         } else T("Escolha \"Personalizado\" para ajustar brilho, contraste e cor.", 11, C.dim)
                         Opts("IA de imagem", AI_UP, PP.aiUp) { v -> PP.aiUp = v; ai.cap = 2; ai.key = "-"; applyAi(); say("IA de imagem: ${AI_UP[v]}") }
-                        Btn(if (ai.compare) "◐ Comparar: mostrando o ORIGINAL" else "◐ Comparar com o original", on = ai.compare, locked = false) { ai.compare = !ai.compare; applyAi(); say(if (ai.compare) "Original, sem IA" else "Com IA: $aiLabel") }
+                        Btn(if (cmpOn) "◐ Comparar: ligado (original | IA)" else "◐ Comparar: tela dividida", on = cmpOn, locked = false) { ai.compare = !ai.compare; cmpOn = ai.compare; ai.key = "-"; applyAi(); say(if (cmpOn) "Esquerda: original · Direita: com IA" else "Comparação desligada") }
+                        Opts("Intensidade da nitidez", SHARP, PP.sharpLevel) { v -> PP.sharpLevel = v; say("Nitidez: ${SHARP[v]}") }
+                        Opts("Painel da TV", PANELS, PP.panel) { v -> PP.panel = v; say("Painel: ${PANELS[v]}") }
                         val f = player.videoFormat
                         T(listOfNotNull(
                             f?.let { "Entrada ${it.width}×${it.height}" + if (it.frameRate > 0) " · ${Math.round(it.frameRate)} quadros/s" else "" },
@@ -591,6 +614,14 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                         Opts("Cor", linkedMapOf("0" to "Branca", "1" to "Amarela"), PP.subColor.toString()) { v -> PP.subColor = v.toInt() }
                         Opts("Fundo", linkedMapOf("0" to "Sem fundo", "1" to "Sombra", "2" to "Caixa escura"), PP.subBg.toString()) { v -> PP.subBg = v.toInt() }
                         T("Busca automática de legendas na internet precisa de um serviço com cadastro (OpenSubtitles); por isso fica para depois.", 11, C.dim)
+                    }
+                    "sync" -> {
+                        T("⏱ Sincronia de som e imagem", 16, C.fg, FontWeight.Bold)
+                        T("Se a boca não bate com a fala: + atrasa o som, − adianta. Fica salvo para os próximos vídeos.", 11, C.muted, lineHeight = 15)
+                        Box(Modifier.focusRequester(panelFocus)) {
+                            Stepper("Atraso do som", PP.avMs, " ms") { d -> PP.avMs = (PP.avMs + d * 50).coerceIn(-2000, 2000); eng.avDelay.targetMs = PP.avMs; say("Som: ${if (PP.avMs > 0) "+" else ""}${PP.avMs} ms") }
+                        }
+                        Btn("Voltar para 0 ms", locked = false) { PP.avMs = 0; eng.avDelay.targetMs = 0; say("Sincronia zerada") }
                     }
                     "audio" -> {
                         T("🗣 Áudio e dublagem", 16, C.fg, FontWeight.Bold)

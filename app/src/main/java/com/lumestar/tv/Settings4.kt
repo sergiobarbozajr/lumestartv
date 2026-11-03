@@ -71,6 +71,9 @@ fun AiImagePanel(st: AppState, locked: Boolean) {
     ))
     Btn(if (GpuProbe.running) "Testando…" else "Testar o aparelho de novo", locked = locked) { GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) { st.say("Diagnóstico pronto: " + tierName[ImageAi.maxTier()]) } }
     T("Automática: a IA testa este aparelho e usa o máximo que ele aguenta. Vídeos abaixo do alvo são reconstruídos na placa de vídeo (os pixels que faltam são recriados a partir dos vizinhos, com nitidez adaptativa). Durante o vídeo, se a TV perder quadros ou o chip esquentar, ela desce de 1440p para 1080p ou para o modo leve, e sobe de novo depois de 1 minuto estável. No modo leve, ela pede a melhor versão do canal quando a internet está firme e deixa a IA do chip da TV fazer o 4K.", 11, C.dim, lineHeight = 15)
+    Opts("Intensidade da nitidez", SHARP, PP.sharpLevel, locked) { PP.sharpLevel = it }
+    Opts("Painel da TV", PANELS, PP.panel, locked) { PP.panel = it }
+    T("HVA é o painel VA da TCL: pretos profundos e alto contraste. Nesse perfil a IA segura a nitidez nas sombras (evita halos) e sobe de leve o quase-preto, o que reduz o rastro em cenas escuras. Automático usa HVA em TVs TCL" + if (ImageAi.tclPanel) " (esta é uma TCL)." else ".", 11, C.dim, lineHeight = 15)
     Opts("Frequência da tela igual à do vídeo", linkedMapOf("1" to "Ligada", "0" to "Desligada"), if (PP.matchHz) "1" else "0", locked) { PP.matchHz = it == "1" }
     Opts("Realce de cor e contraste", ENHANCE, PP.enhance, locked) { PP.enhance = it }
     Opts("Modo de imagem", PRESETS, PP.preset, locked) { PP.preset = it }

@@ -134,7 +134,7 @@ private fun Hint(title: String, text: String) {
 
 // ---------------- abas por categoria ----------------
 @Composable
-fun TabPage(st: AppState, tab: String, title: String, desc: String, locked: Boolean, hero: Boolean = true) {
+fun TabPage(st: AppState, tab: String, title: String, desc: String, locked: Boolean, hero: Boolean = true, top: (@Composable () -> Unit)? = null) {
     val rev = Catalog.rev
     var recent by remember(tab) { mutableStateOf(false) }
     val rows = remember(rev, tab, recent, Store.adultOpen) {
@@ -144,6 +144,7 @@ fun TabPage(st: AppState, tab: String, title: String, desc: String, locked: Bool
     val total = rows.sumOf { it.second.size }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item { if (heroL.isNotEmpty()) Hero(st, heroL, locked) else Head(title, desc) }
+        if (top != null) item { top() }
         item { Loading() }
         item {
             Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {

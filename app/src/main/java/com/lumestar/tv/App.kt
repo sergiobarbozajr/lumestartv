@@ -409,7 +409,9 @@ private fun Page(st: AppState, locked: Boolean) {
                 "lista" -> MyListPage(st, locked)
                 "lancamentos" -> ReleasesPage(st, locked)
                 "aovivo" -> TabPage(st, "aovivo", "TV ao vivo", n.desc, locked, hero = true)
-                "musicas" -> TabPage(st, "musicas", "Músicas", "Rádios e canais de música da sua lista. Os apps de música (Spotify, YouTube Music, Deezer…) chegam na entrega 4.", locked, hero = false)
+                "musicas" -> TabPage(st, "musicas", "Músicas", "Rádios e canais de música da sua lista, e os seus apps de música.", locked, hero = false, top = { MusicApps(st, locked) })
+                "streaming" -> StreamingPage(st, locked)
+                "assistente" -> AssistantPage(st, locked)
                 "filmes", "series", "novelas", "infantil", "documentarios", "esportes", "noticias" -> TabPage(st, n.id, n.label, n.desc, locked)
                 else -> Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp)) {
                     T(n.label, 28, C.fg, FontWeight.ExtraBold)
