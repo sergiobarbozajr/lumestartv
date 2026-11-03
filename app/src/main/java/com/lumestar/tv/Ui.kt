@@ -172,6 +172,10 @@ fun Hero(st: AppState, list: List<HeroEntry>, locked: Boolean) {
 }
 
 fun heroFrom(items: List<Item>, n: Int = 6): List<HeroEntry> {
+    if (items.isNotEmpty() && items.all { it.kind == LIVE }) {
+        // TV ao vivo: um canal de cada categoria, de preferência com logo
+        return items.groupBy { it.group }.values.mapNotNull { g -> g.firstOrNull { it.logo.isNotBlank() } ?: g.firstOrNull() }.take(n).map { heroOf(it) }
+    }
     val withImg = items.filter { it.logo.isNotBlank() && it.kind != LIVE }
     val pool = (if (withImg.size >= 3) withImg else items).sortedWith(compareByDescending<Item> { it.year }.thenBy { it.title.hashCode() })
     return pool.take(n).map { heroOf(it) }

@@ -273,7 +273,7 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     val locked by remember { derivedStateOf { st.overlay || st.openT >= 0f } }
     Box(Modifier.fillMaxSize()) {
         // conteúdo (templates) — nasce depois que o buraco fecha
-        Box(Modifier.fillMaxSize().padding(start = 64.dp)) {
+        Box(Modifier.fillMaxSize().padding(start = 48.dp)) {
             Page(st, locked)
             TopBar(st)
         }
@@ -304,23 +304,26 @@ private fun TopBar(st: AppState) {
 }
 
 // ---------------- menu lateral ----------------
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun Sidebar(st: AppState, locked: Boolean) {
-    val w by animateDpAsState(if (st.navHasFocus) 220.dp else 64.dp, tween(220), label = "nav")
+    val w by animateDpAsState(if (st.navHasFocus) 190.dp else 48.dp, tween(220), label = "nav")
     val d = LocalDensity.current
     val center = with(d) { Offset(480.dp.toPx(), 270.dp.toPx()) }
     Column(
         Modifier.fillMaxHeight().width(w)
             .drawBehind { drawRect(Brush.horizontalGradient(if (st.navHasFocus) listOf(Color(0xFF070C26), Color(0xFA050816)) else listOf(Color(0xF2070C26), Color(0xEB050816))), alpha = Opening.block(st.openT, 0)) }
             .onFocusChanged { st.navHasFocus = it.hasFocus }
+            // ao voltar do conteúdo para o menu, o foco vai para a aba aberta (não para a opção mais próxima)
+            .focusProperties { enter = { st.navReq[st.page] ?: FocusRequester.Default } }
             .focusGroup()
-            .padding(horizontal = 9.dp, vertical = 10.dp),
+            .padding(horizontal = 5.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         // logo: só o "L" fechado; "LumeStarTV" com o menu aberto
         Box(Modifier.height(40.dp).fillMaxWidth().clipToBounds().graphicsLayer { alpha = Opening.item(st.openT, 0) }, contentAlignment = Alignment.CenterStart) {
             val logo = TextStyle(fontFamily = F.logo, fontSize = 30.sp)
-            Box(Modifier.padding(start = 8.dp)) {
+            Box(Modifier.padding(start = 6.dp)) {
                 GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo)
                 GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo, Modifier.offset(y = 24.dp).graphicsLayer { scaleY = -1f; alpha = .22f })
             }
@@ -362,10 +365,10 @@ private fun NavItem(st: AppState, n: Nav, idx: Int, center: Offset, locked: Bool
                 if (n.id == "sair") st.exitAsk = true else st.page = n.id
             }
             
-            .padding(start = 12.dp),
+            .padding(start = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.width(3.dp).height(12.dp).offset(x = (-9).dp).background(if (cur && !focused) C.a1 else Color.Transparent, RoundedCornerShape(2.dp)))
+        Box(Modifier.width(3.dp).height(12.dp).offset(x = (-7).dp).background(if (cur && !focused) C.a1 else Color.Transparent, RoundedCornerShape(2.dp)))
         Icon(n.icon, if (focused) Color(0xFF050816) else if (cur) C.fg else C.muted, 17.dp)
         if (st.navHasFocus) {
             Spacer(Modifier.width(14.dp))
@@ -396,7 +399,7 @@ private fun Page(st: AppState, locked: Boolean) {
                 "pesquisa" -> SearchPage(st, locked)
                 "lista" -> MyListPage(st, locked)
                 "lancamentos" -> ReleasesPage(st, locked)
-                "aovivo" -> TabPage(st, "aovivo", "TV ao vivo", n.desc, locked, hero = false)
+                "aovivo" -> TabPage(st, "aovivo", "TV ao vivo", n.desc, locked, hero = true)
                 "musicas" -> TabPage(st, "musicas", "Músicas", "Rádios e canais de música da sua lista. Os apps de música (Spotify, YouTube Music, Deezer…) chegam na entrega 4.", locked, hero = false)
                 "filmes", "series", "novelas", "infantil", "documentarios", "esportes", "noticias" -> TabPage(st, n.id, n.label, n.desc, locked)
                 else -> Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp)) {
