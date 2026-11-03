@@ -251,6 +251,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
     var vsize by remember { mutableStateOf(VideoSize.UNKNOWN) }
     var osd by remember { mutableStateOf("") }
     var osdId by remember { mutableIntStateOf(0) }
+    var wantPlay by remember { mutableIntStateOf(1) }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
@@ -345,14 +346,14 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
     LaunchedEffect(showUi, touch, panel) {
         if (showUi && panel == null) { delay(5000); showUi = false; try { rootFocus.requestFocus() } catch (e: Exception) {} }
     }
-    LaunchedEffect(Unit) { delay(80); try { playFocus.requestFocus() } catch (e: Exception) {} }
+    LaunchedEffect(wantPlay) { repeat(3) { delay(60); try { playFocus.requestFocus(); return@LaunchedEffect } catch (e: Exception) {} } }
     LaunchedEffect(panel) { if (panel != null) { delay(60); try { panelFocus.requestFocus() } catch (e: Exception) {} } }
     LaunchedEffect(osdId) { if (osdId > 0) { delay(2200); osd = "" } }
     LaunchedEffect(PP.rev) { applyPicture(); applySubStyle(); fx()?.apply() }
 
     BackHandler {
         when {
-            panel != null -> { panel = null; try { playFocus.requestFocus() } catch (e: Exception) {} }
+            panel != null -> { panel = null; wantPlay++ }
             showUi -> { showUi = false; try { rootFocus.requestFocus() } catch (e: Exception) {} }
             else -> { save(); st.closePlayer() }
         }
@@ -369,10 +370,10 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                 touch++
                 if (showUi) return@onKeyEvent false
                 when (ev.key.nativeKeyCode) {
-                    AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER, AKey.KEYCODE_NUMPAD_ENTER, AKey.KEYCODE_MEDIA_PLAY_PAUSE -> { if (player.isPlaying) player.pause() else player.play(); showControls(); try { playFocus.requestFocus() } catch (e: Exception) {}; true }
+                    AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER, AKey.KEYCODE_NUMPAD_ENTER, AKey.KEYCODE_MEDIA_PLAY_PAUSE -> { if (player.isPlaying) player.pause() else player.play(); showControls(); wantPlay++; true }
                     AKey.KEYCODE_DPAD_LEFT, AKey.KEYCODE_MEDIA_REWIND -> { seek(-10_000); true }
                     AKey.KEYCODE_DPAD_RIGHT, AKey.KEYCODE_MEDIA_FAST_FORWARD -> { seek(10_000); true }
-                    AKey.KEYCODE_DPAD_UP, AKey.KEYCODE_DPAD_DOWN, AKey.KEYCODE_INFO, AKey.KEYCODE_MENU -> { showControls(); try { playFocus.requestFocus() } catch (e: Exception) {}; true }
+                    AKey.KEYCODE_DPAD_UP, AKey.KEYCODE_DPAD_DOWN, AKey.KEYCODE_INFO, AKey.KEYCODE_MENU -> { showControls(); wantPlay++; true }
                     else -> false
                 }
             }
