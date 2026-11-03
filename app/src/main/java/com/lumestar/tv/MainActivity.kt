@@ -17,11 +17,27 @@ class MainActivity : ComponentActivity() {
         Sfx.enabled = prefs.sounds
         Sfx.setVolume(prefs.volume)
         Sfx.warmUp()
+        Tracks.prepare(this)
+        createdAt = android.os.SystemClock.uptimeMillis()
         setContent { LumeApp(prefs) { finish() } }
     }
 
-    /** Durante a abertura, qualquer tecla do controle pula direto para o buraco de minhoca. */
+    private var createdAt = 0L
+    private val pressed = HashSet<Int>()
+
+    /**
+     * Ao abrir pelo ícone, o "soltar" do OK apertado na tela da TV chega aqui.
+     * Esse soltar sem um apertar correspondente é ignorado, assim como toques no primeiro instante.
+     * Durante a abertura, qualquer tecla (apertada e solta aqui) pula para o buraco de minhoca.
+     */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (android.os.SystemClock.uptimeMillis() - createdAt < 600) return true
+            pressed.add(code)
+        } else if (event.action == KeyEvent.ACTION_UP) {
+            if (!pressed.remove(code)) return true
+        }
         val skip = IntroSkip.handler
         if (skip != null) {
             if (event.action == KeyEvent.ACTION_UP) skip()

@@ -365,13 +365,16 @@ object Sfx {
     fun tick() { if (enabled && gain > 0f) exec.execute { tick?.let { replay(it) } } }
     fun ok() { if (enabled && gain > 0f) exec.execute { ok?.let { replay(it) } } }
 
-    /** Toca uma trilha longa (abertura). Retorna quando começou a tocar. */
-    fun playLong(pcm: ShortArray?) {
+    /** Toca uma trilha longa (abertura) a partir de "fromSec" segundos, para ficar junto com a imagem. */
+    fun playLong(pcm: ShortArray?, fromSec: Float = 0f) {
         stopLong()
         if (!enabled || gain <= 0f || pcm == null) return
+        val frame = (fromSec * Synth.SR).toInt()
+        if (frame >= pcm.size - Synth.SR / 10) return
         try {
             val t = make(pcm)
             t.setVolume(gain)
+            if (frame > 0) t.setPlaybackHeadPosition(frame)
             t.play()
             long = t
         } catch (e: Throwable) {}
@@ -381,5 +384,48 @@ object Sfx {
         val t = long ?: return
         long = null
         try { t.stop(); t.release() } catch (e: Throwable) {}
+    }
+}
+
+/**
+ * Trilhas da abertura prontas antes de precisar delas. Na primeira vez são geradas
+ * em segundo plano e guardadas no aparelho; nas próximas aberturas só são lidas do arquivo.
+ */
+object Tracks {
+    val plan = IntroPlan()
+    @Volatile var intro: ShortArray? = null
+    @Volatile var opening: ShortArray? = null
+    @Volatile private var started = false
+
+    fun prepare(c: android.content.Context) {
+        if (started) return
+        started = true
+        val dir = java.io.File(c.cacheDir, "sons").apply { mkdirs() }
+        val ver = try { c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "0" } catch (e: Exception) { "0" }
+        kotlin.concurrent.thread(name = "sons-abertura", priority = Thread.MAX_PRIORITY) {
+            intro = load(dir, "abertura-$ver") ?: try { Synth.introTrack(plan).also { save(dir, "abertura-$ver", it) } } catch (e: Throwable) { null }
+            opening = load(dir, "buraco-$ver") ?: try { Synth.openingTrack().also { save(dir, "buraco-$ver", it) } } catch (e: Throwable) { null }
+            dir.listFiles()?.forEach { if (!it.name.endsWith("-$ver.pcm")) it.delete() }
+        }
+    }
+
+    private fun load(dir: java.io.File, name: String): ShortArray? = try {
+        val f = java.io.File(dir, "$name.pcm")
+        if (!f.exists() || f.length() < 1000) null else {
+            val bytes = f.readBytes()
+            val out = ShortArray(bytes.size / 2)
+            java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(out)
+            out
+        }
+    } catch (e: Throwable) { null }
+
+    private fun save(dir: java.io.File, name: String, pcm: ShortArray) {
+        try {
+            val bb = java.nio.ByteBuffer.allocate(pcm.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            bb.asShortBuffer().put(pcm)
+            val tmp = java.io.File(dir, "$name.tmp")
+            tmp.writeBytes(bb.array())
+            tmp.renameTo(java.io.File(dir, "$name.pcm"))
+        } catch (e: Throwable) {}
     }
 }

@@ -200,13 +200,13 @@ private fun Shell(st: AppState, finish: () -> Unit) {
     val ctx = LocalContext.current
     // linha do tempo da abertura pelo buraco de minhoca
     LaunchedEffect(Unit) {
-        val pcm = if (st.prefs.sounds) withContext(Dispatchers.Default) { try { Synth.openingTrack() } catch (e: Throwable) { null } } else null
-        Sfx.playLong(pcm)
+        var playing = !st.prefs.sounds
         val start = withFrameNanos { it }
         st.openT = 0f
         while (true) {
             val now = withFrameNanos { it }
             st.openT = ((now - start) / 1e9).toFloat()
+            if (!playing) { val pcm = Tracks.opening; if (pcm != null) { playing = true; Sfx.playLong(pcm, st.openT) } }
             if (st.openT >= Opening.END) break
         }
         st.openT = -1f

@@ -241,18 +241,19 @@ object Space {
 fun IntroScreen(soundOn: Boolean, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val done by rememberUpdatedState(onDone)
-    val plan = remember { IntroPlan() }
-    var t by remember { mutableFloatStateOf(-1f) }
+    val plan = Tracks.plan
+    var t by remember { mutableFloatStateOf(0f) }
     val typeface = remember { ResourcesCompat.getFont(ctx, R.font.creepster) ?: Typeface.SERIF }
     val text = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { this.typeface = typeface } }
 
     LaunchedEffect(Unit) {
-        val pcm = if (soundOn) withContext(Dispatchers.Default) { try { Synth.introTrack(plan) } catch (e: Throwable) { null } } else null
-        Sfx.playLong(pcm)
+        // a imagem começa na hora; o som entra assim que estiver pronto, já no ponto certo
+        var playing = !soundOn
         val start = withFrameNanos { it }
         while (true) {
             val now = withFrameNanos { it }
             t = ((now - start) / 1e9).toFloat()
+            if (!playing) { val pcm = Tracks.intro; if (pcm != null) { playing = true; Sfx.playLong(pcm, t) } }
             if (t >= IntroPlan.END) break
         }
         done()
@@ -265,7 +266,6 @@ fun IntroScreen(soundOn: Boolean, onDone: () -> Unit) {
             val s = min(W / 1280f, H / 720f)
             val cx = W / 2; val cy = H / 2
             c.drawColor(0xFF01030B.toInt())
-            if (t < 0f) return@drawIntoCanvas
             drawIntro(c, plan, text, t, W, H, s, cx, cy)
         }
     }
