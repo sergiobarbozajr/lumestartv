@@ -3,6 +3,7 @@ package com.lumestar.tv
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -99,7 +100,8 @@ fun ListsPanel(st: AppState, locked: Boolean) {
     var tick by remember { mutableIntStateOf(0) }
     tick.let { }
     T("Cole o endereço de uma lista M3U, M3U8, JSON ou TXT. Cada canal, filme e série vai sozinho para a aba certa, pelo grupo (group-title) e pelo nome.", 13, C.muted, lineHeight = 19)
-    if (Store.lists.isEmpty()) T("Nenhuma lista ainda.", 13, C.dim)
+    PhoneBox(st)
+    if (Store.lists.isEmpty()) T("Nenhuma lista ainda.", 13, C.dim) else T("LISTAS SALVAS (${Store.lists.size})", 10, C.muted, FontWeight.Bold)
     Store.lists.toList().forEachIndexed { i, l ->
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.bg).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
@@ -123,8 +125,7 @@ fun ListsPanel(st: AppState, locked: Boolean) {
         Btn(if (Catalog.loading) "Atualizando…" else "Atualizar agora", locked = locked) { Catalog.refresh(ctx) { st.say(it) } }
     }
     if (Catalog.status.isNotBlank()) T(Catalog.status, 12, C.muted, lineHeight = 17)
-    T("Formatos aceitos agora: M3U, M3U8 (lista de canais), JSON e TXT. XMLTV (guia), MPD, PLS/XSPF e proxy chegam na entrega 3.", 12, C.dim, lineHeight = 17)
-    PhoneBox(st)
+    T("Formatos aceitos: M3U, M3U8, JSON e TXT. Se o servidor da lista for bloqueado na sua internet, use Configurações › Proxy.", 12, C.dim, lineHeight = 17)
 }
 
 /** Caixa "Enviar pelo celular": liga a página na rede de casa só enquanto estiver na tela. */
@@ -158,7 +159,11 @@ fun PhoneBox(st: AppState) {
         PhoneServer.start()
         onDispose { PhoneServer.stop(); if (PhoneServer.onReceive === mine) PhoneServer.onReceive = null }
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.a2.copy(alpha = .12f)).border(1.dp, C.a2.copy(alpha = .4f), RoundedCornerShape(12.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    var f by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.a2.copy(alpha = if (f) .22f else .12f))
+        .border(if (f) 2.dp else 1.dp, if (f) C.a1 else C.a2.copy(alpha = .4f), RoundedCornerShape(12.dp))
+        .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); f = n }.focusable()
+        .padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         T("ENVIAR PELO CELULAR", 10, C.a2, FontWeight.Bold)
         if (ip == null) T("A TV não está conectada a uma rede.", 13, C.fg, FontWeight.SemiBold)
         else {
