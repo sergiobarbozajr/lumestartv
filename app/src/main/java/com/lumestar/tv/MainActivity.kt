@@ -16,6 +16,8 @@ class MainActivity : ComponentActivity() {
         val prefs = Prefs(this)
         Store.init(this)
         PP.init(this)
+        Catalog.rev.let { } // cria o catálogo (e seus estados) na linha da tela, antes da linha de fundo
+        OfflineScan.running.let { }
         kotlin.concurrent.thread(name = "catalogo-cache") { Catalog.loadCache(applicationContext) }
         Sfx.enabled = prefs.sounds
         Sfx.setVolume(prefs.volume)
