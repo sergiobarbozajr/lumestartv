@@ -243,7 +243,7 @@ fun IntroScreen(soundOn: Boolean, onDone: () -> Unit) {
     val done by rememberUpdatedState(onDone)
     val plan = Tracks.plan
     var t by remember { mutableFloatStateOf(0f) }
-    val typeface = remember { ResourcesCompat.getFont(ctx, R.font.creepster) ?: Typeface.SERIF }
+    val typeface = remember { ResourcesCompat.getFont(ctx, R.font.nanum_brush) ?: Typeface.SERIF }
     val text = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { this.typeface = typeface } }
 
     LaunchedEffect(Unit) {
@@ -371,7 +371,7 @@ private fun drawName(c: Canvas, plan: IntroPlan, p: Paint, t: Float, s: Float, c
     val e = 1 - (1 - inK).pow(3)
     val fade = if (t > IntroPlan.BLACK - .18) max(0f, ((IntroPlan.BLACK - t) / .18).toFloat()) else 1f
     val sc = .9f + .1f * e
-    p.textSize = 150 * s * sc
+    p.textSize = 178 * s * sc
     p.shader = null; p.clearShadowLayer()
     val ww = p.measureText(word)
     val x0 = cx - ww / 2

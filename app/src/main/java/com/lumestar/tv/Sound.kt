@@ -213,6 +213,18 @@ object Synth {
         return out
     }
 
+    /**
+     * Abafa a eletricidade: tira o chiado agudo (dois passa-baixas), deixa um corpo grave
+     * e joga num eco escuro e longo, como um estalo ouvido de dentro de uma nave.
+     */
+    private fun muffle(src: Buf, dst: Buf) {
+        val l1 = Bq().lp(820.0, 0.6); val l2 = Bq().lp(1100.0, 0.7); val body = Bq().lp(180.0, 0.9)
+        val dry = DoubleArray(src.d.size)
+        for (i in dry.indices) { val x = src.d[i].toDouble(); val m = l2.run(l1.run(x)); dry[i] = m * 1.5 + body.run(x) * 1.1 }
+        val wet = reverb(dry); val dark = Bq().lp(600.0)
+        for (i in dry.indices) dst.add(i, dry[i] * 0.75 + dark.run(wet[i]) * 0.7)
+    }
+
     fun buzz(b: Buf, t0: Double, len: Double) {
         val s = (t0 * SR).toInt(); val bp = Bq().bp(900.0, 1.8); var p1 = 0.0; var p2 = 0.0; var pl = 0.0
         for (i in 0 until (len * SR).toInt()) {
@@ -278,14 +290,17 @@ object Synth {
         val rnd = Random(7)
         val b = Buf(IntroPlan.END + 0.3)
         hole(b, 0.0, IntroPlan.TB + 0.1, rnd)
-        plan.holeBolts.forEach { zap(b, it, rnd, 0.9) }
+        // eletricidade vai para uma trilha própria, abafada depois (no espaço o som chega surdo e distante)
+        val e = Buf(IntroPlan.END + 0.3)
+        plan.holeBolts.forEach { zap(e, it, rnd, 0.9) }
         riser(b, 3.55, 1.15, rnd)
         boom(b, IntroPlan.TB, rnd)
-        zap(b, IntroPlan.TB + 0.14, rnd); zap(b, IntroPlan.TB + 0.32, rnd)
+        zap(e, IntroPlan.TB + 0.14, rnd); zap(e, IntroPlan.TB + 0.32, rnd)
         reveal(b, 5.0, 10, rnd)
-        for (i in 0 until 10) zap(b, IntroPlan.NAME + i * 0.12, rnd, 0.7)
-        buzz(b, 6.65, 1.9)
-        plan.arcs.filter { it.sound }.forEach { zap(b, it.t, rnd, 0.6) }
+        for (i in 0 until 10) zap(e, IntroPlan.NAME + i * 0.12, rnd, 0.7)
+        buzz(e, 6.65, 1.9)
+        plan.arcs.filter { it.sound }.forEach { zap(e, it.t, rnd, 0.6) }
+        muffle(e, b)
         powerDown(b, IntroPlan.BLACK, rnd)
         return toPcm(b.d)
     }

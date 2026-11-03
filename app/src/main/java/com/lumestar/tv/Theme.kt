@@ -50,7 +50,7 @@ object F {
         Font(R.font.inter_bold, FontWeight.Bold),
         Font(R.font.inter_extrabold, FontWeight.ExtraBold),
     )
-    val logo = FontFamily(Font(R.font.creepster, FontWeight.Normal))
+    val logo = FontFamily(Font(R.font.nanum_brush, FontWeight.Normal))
 }
 
 /**
@@ -86,6 +86,10 @@ class Prefs(c: Context) {
     var city: String
         get() = sp.getString("cidade", "") ?: ""
         set(v) = sp.edit().putString("cidade", v).apply()
+    /** posição da cidade escolhida na lista de resultados ("lat,lon"); vazio = procurar pelo nome */
+    var cityPos: String
+        get() = sp.getString("cidadePos", "") ?: ""
+        set(v) = sp.edit().putString("cidadePos", v).apply()
     var weather: Boolean
         get() = sp.getBoolean("clima", true)
         set(v) = sp.edit().putBoolean("clima", v).apply()

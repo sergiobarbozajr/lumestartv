@@ -11,8 +11,8 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 19
-        versionName = "0.4.5"
+        versionCode = 20
+        versionName = "0.4.6"
         // chave padrão do TMDB: vem do segredo TMDB_KEY do GitHub na hora de compilar (nunca fica no código)
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() } + "\"")
         buildConfigField("String", "TMDB_KEY2", "\"" + (System.getenv("TMDB_KEY_2") ?: "").filter { it.isLetterOrDigit() } + "\"")
@@ -81,4 +81,5 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3")
     implementation("androidx.media3:media3-datasource-okhttp:$media3")
     implementation("androidx.media3:media3-datasource-rtmp:$media3")
+    implementation("androidx.media3:media3-effect:$media3")
 }

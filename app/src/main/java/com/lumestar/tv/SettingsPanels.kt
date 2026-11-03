@@ -117,7 +117,8 @@ fun ListsPanel(st: AppState, locked: Boolean) {
             st.kb = KbTarget("Endereço da lista", "", hint = "http://servidor/lista.m3u") { url ->
                 val u = url.trim()
                 if (!u.contains("://")) { st.say("O endereço precisa começar com http:// ou https://"); return@KbTarget }
-                Store.lists.add(ListSrc("Lista ${Store.lists.size + 1}", u)); Store.saveLists(); tick++
+                if (!Store.addList("Lista ${Store.lists.size + 1}", u)) { st.say("Essa lista já está salva. Não foi adicionada de novo."); return@KbTarget }
+                tick++
                 st.say("Lista adicionada. Carregando…")
                 Catalog.refresh(ctx) { st.say(it) }
             }
@@ -140,9 +141,8 @@ fun PhoneBox(st: AppState) {
                 val k = f["chave"].orEmpty()
                 Tmdb.test(k) { m, ok -> if (ok) { Tmdb.setKey(k); st.say("TMDB ligado. As capas vão aparecendo nas abas.") } else st.say(m) }
             } else if (f["tipo"] == "lista") {
-                Store.lists.add(ListSrc(f["nome"].orEmpty().ifBlank { "Lista ${Store.lists.size + 1}" }, f["url"].orEmpty())); Store.saveLists()
-                st.say("Lista recebida do celular. Carregando…")
-                Catalog.refresh(ctx) { st.say(it) }
+                if (!Store.addList(f["nome"].orEmpty().ifBlank { "Lista ${Store.lists.size + 1}" }, f["url"].orEmpty())) st.say("Essa lista já está salva. Não foi adicionada de novo.")
+                else { st.say("Lista recebida do celular. Carregando…"); Catalog.refresh(ctx) { st.say(it) } }
             } else {
                 val i = Store.accounts.indexOfFirst { !it.filled }.let { if (it < 0) Store.activeAcc.coerceAtLeast(0) else it }
                 val a = Account(f["nome"].orEmpty().ifBlank { "Conta ${i + 1}" }, f["servidor"].orEmpty(), f["usuario"].orEmpty(), f["senha"].orEmpty())

@@ -100,6 +100,7 @@ val AUDIO_AI = linkedMapOf("off" to "Desligado", "auto" to "Automático", "dialo
 val EQS = linkedMapOf("padrao" to "Padrão", "voz" to "Voz", "filme" to "Filme", "musica" to "Música", "esporte" to "Esporte", "noturno" to "Noturno")
 private val EQ_V = mapOf("padrao" to intArrayOf(0, 0, 0), "voz" to intArrayOf(-3, 4, 1), "filme" to intArrayOf(4, 0, 2), "musica" to intArrayOf(3, 0, 3), "esporte" to intArrayOf(1, 2, 3), "noturno" to intArrayOf(-4, 2, 0))
 val FITS = listOf("Original", "Preencher (sem faixas)", "Zoom 120%")
+val AI_UP = linkedMapOf("auto" to "Automática", "off" to "Desligada")
 val QUALITY = linkedMapOf("auto" to "Automática", "480" to "480p", "720" to "720p", "1080" to "1080p", "2160" to "2160p")
 
 /** Filtro de cor do vídeo: modo de imagem + brilho, contraste e cor + realce. */
@@ -252,6 +253,8 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
     var osd by remember { mutableStateOf("") }
     var osdId by remember { mutableIntStateOf(0) }
     var wantPlay by remember { mutableIntStateOf(1) }
+    var aiLabel by remember { mutableStateOf("") }
+    val ai = remember { object { var key = ""; var gpuOff = false; val hist = LongArray(10); var idx = 0 } }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
@@ -290,6 +293,29 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
         sv.setFractionalTextSize(when (PP.subSize) { 0 -> .045f; 2 -> .075f; else -> .058f })
     }
 
+    /** IA de imagem: reconstrói para 1080p o vídeo abaixo disso (sistema do AstroLume 0.25). */
+    fun applyAi() {
+        val plan = ImageAi.plan(PP.aiUp == "auto", player.videoFormat, ai.gpuOff)
+        aiLabel = plan.label
+        if (plan.key == ai.key) return
+        val had = ai.key.startsWith("up") || ai.key == "sharp"
+        ai.key = plan.key
+        if (plan.effects.isEmpty() && !had) return
+        try { player.setVideoEffects(plan.effects) } catch (e: Throwable) { ai.gpuOff = true; aiLabel = "" }
+    }
+
+    /** Quadros perdidos nos últimos 10 s; se a TV engasgar com o reforço, ele é desligado e o vídeo segue. */
+    fun watchDrops() {
+        val dc = player.videoDecoderCounters ?: return
+        dc.ensureUpdated()
+        val now = dc.droppedBufferCount.toLong() + dc.skippedOutputBufferCount
+        val old = ai.hist[ai.idx]; ai.hist[ai.idx] = now; ai.idx = (ai.idx + 1) % ai.hist.size
+        val lost = if (old in 1..now) now - old else 0L
+        if ((ai.key == "up1080" || ai.key == "sharp") && player.isPlaying && lost > 24) {
+            ai.gpuOff = true; ai.hist.fill(0L); applyAi(); say("A TV estava perdendo quadros: reforço de imagem pausado neste vídeo")
+        }
+    }
+
     /** Tira as faixas pretas: olha uma foto pequena do vídeo e mede as bordas escuras. */
     fun autoBars() {
         val bmp = try { tv()?.getBitmap(96, 54) } catch (e: Throwable) { null } ?: run { say("Ainda sem imagem para medir"); return }
@@ -323,10 +349,11 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(o.group.mediaTrackGroup, o.index)).build()
                 }
             }
-            override fun onVideoSizeChanged(v: VideoSize) { vsize = v; layoutVideo() }
+            override fun onVideoSizeChanged(v: VideoSize) { vsize = v; layoutVideo(); applyAi() }
             override fun onCues(c: CueGroup) { (holder[2] as? SubtitleView)?.setCues(c.cues) }
             override fun onAudioSessionIdChanged(id: Int) { fx()?.release(); holder[3] = AudioFx(id).also { it.apply() } }
             override fun onPlayerError(e: PlaybackException) {
+                if (e.errorCode in 7000..7999 && !ai.gpuOff) { ai.gpuOff = true; ai.key = ""; try { player.setVideoEffects(emptyList()) } catch (x: Throwable) {}; startAt = player.currentPosition; attempt++; say("Reforço de imagem desligado neste vídeo (a TV não aguentou)"); return }
                 val bad = e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                 if (bad && !triedVlc) { triedVlc = true; eng.ok.setUserAgent(UA_VLC); startAt = player.currentPosition; attempt++; return }
                 if (req.live && !triedTs && url.contains(".m3u8") && req.ext == "ts") { triedTs = true; url = url.replace(".m3u8", ".ts"); attempt++; return }
@@ -341,7 +368,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }
     LaunchedEffect(Unit) {
         var n = 0
-        while (true) { delay(500); pos = player.currentPosition; if (player.duration > 0) dur = player.duration; if (++n % 10 == 0) save() }
+        while (true) { delay(500); pos = player.currentPosition; if (player.duration > 0) dur = player.duration; if (++n % 10 == 0) save(); if (n % 2 == 0) watchDrops() }
     }
     LaunchedEffect(showUi, touch, panel) {
         if (showUi && panel == null) { delay(5000); showUi = false; try { rootFocus.requestFocus() } catch (e: Exception) {} }
@@ -349,7 +376,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
     LaunchedEffect(wantPlay) { repeat(3) { delay(60); try { playFocus.requestFocus(); return@LaunchedEffect } catch (e: Exception) {} } }
     LaunchedEffect(panel) { if (panel != null) { delay(60); try { panelFocus.requestFocus() } catch (e: Exception) {} } }
     LaunchedEffect(osdId) { if (osdId > 0) { delay(2200); osd = "" } }
-    LaunchedEffect(PP.rev) { applyPicture(); applySubStyle(); fx()?.apply() }
+    LaunchedEffect(PP.rev) { applyPicture(); applySubStyle(); fx()?.apply(); applyAi() }
 
     BackHandler {
         when {
@@ -411,7 +438,8 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                 val v = vsize
                 val badges = listOfNotNull(
                     if (v.height > 0) "${v.height}p" else null,
-                    if (PP.enhance != "off") "✦ Realce ${ENHANCE[PP.enhance]}" else null,
+                    aiLabel.ifBlank { null }?.let { "✦ $it" },
+                    if (PP.enhance != "off") "Realce ${ENHANCE[PP.enhance]}" else null,
                     if (PP.preset != "padrao") "☀ ${PRESETS[PP.preset]}" else null,
                     if (PP.audioAi != "off") "♪ ${AUDIO_AI[PP.audioAi]}" else null,
                     if (tracksOf(tracks, MC.TRACK_TYPE_TEXT).any { it.selected }) "CC" else null,
@@ -471,6 +499,8 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
                             Stepper("Contraste", PP.contrast, "") { d -> PP.contrast = (PP.contrast + d * 5).coerceIn(-50, 50) }
                             Stepper("Cor (saturação)", PP.sat, "") { d -> PP.sat = (PP.sat + d * 5).coerceIn(-50, 50) }
                         } else T("Escolha \"Personalizado\" para ajustar brilho, contraste e cor.", 11, C.dim)
+                        Opts("IA de imagem (até 1080p)", AI_UP, PP.aiUp) { v -> PP.aiUp = v; say(if (v == "auto") "IA de imagem ligada" else "IA de imagem desligada") }
+                        if (aiLabel.isNotBlank()) T("Agora: $aiLabel", 11, C.a1, FontWeight.SemiBold)
                         Opts("Realce de imagem", ENHANCE, PP.enhance) { v -> PP.enhance = v }
                         Opts("Qualidade máxima", QUALITY, PP.quality) { v -> PP.quality = v; eng.applyQuality(); say("Qualidade: ${QUALITY[v]}") }
                         T("Vale para todos os vídeos e fica salvo. O realce aumenta contraste e cor de forma leve, sem pesar o aparelho.", 11, C.dim)

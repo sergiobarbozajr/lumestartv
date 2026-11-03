@@ -12,4 +12,4 @@ App de IPTV para Android TV, por Sérgio Barboza Júnior.
 3. Reprodutor: linha do tempo, imagem, tela (faixas pretas), som, legendas, dublagem, transmissão de rede estilo VLC e proxy.
 4. Extras: IA de imagem e de áudio, Assistente IA, Streaming e Músicas, demais configurações.
 
-Fontes: Inter e Creepster (licença SIL OFL, em `app/src/main/assets/licencas`).
+Fontes: Inter e Nanum Brush Script (licença SIL OFL, em `app/src/main/assets/licencas`).

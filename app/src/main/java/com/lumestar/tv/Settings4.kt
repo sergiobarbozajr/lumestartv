@@ -53,11 +53,14 @@ fun TmdbPanel(st: AppState, locked: Boolean) {
 }
 
 // ---------------- IA de imagem ----------------
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun AiImagePanel(st: AppState, locked: Boolean) {
     PP.rev.let { }
     T("Melhora a imagem durante o vídeo: realça contraste e cor de forma leve, e o modo de imagem ajusta brilho, contraste e saturação. Roda na placa de vídeo da TV, sem pesar.", 13, C.muted, lineHeight = 19)
-    Opts("Realce (IA de imagem)", ENHANCE, PP.enhance, locked) { PP.enhance = it }
+    Opts("IA de imagem: reconstruir até 1080p", AI_UP, PP.aiUp, locked) { PP.aiUp = it }
+    T("Vídeos abaixo de 1080p (480p, 720p) são reconstruídos para 1080p na placa de vídeo: os pixels que faltam são recriados a partir dos vizinhos e as bordas ganham nitidez sem criar ruído. Vídeos em 1080p ou 4K vão direto. Se a TV começar a perder quadros, o reforço desliga sozinho naquele vídeo. " + ImageAi.summary(), 11, C.dim, lineHeight = 15)
+    Opts("Realce de cor e contraste", ENHANCE, PP.enhance, locked) { PP.enhance = it }
     Opts("Modo de imagem", PRESETS, PP.preset, locked) { PP.preset = it }
     if (PP.preset == "pers") {
         Stepper("Brilho", PP.bright, "", locked) { d -> PP.bright = (PP.bright + d * 5).coerceIn(-50, 50) }
@@ -100,12 +103,33 @@ fun ThemePanel(st: AppState, locked: Boolean) {
 fun WeatherPanel(st: AppState, locked: Boolean) {
     var city by remember { mutableStateOf(st.prefs.city) }
     var on by remember { mutableStateOf(st.prefs.weather) }
-    T("Mostra o clima da sua cidade no topo da tela, ao lado do relógio. Usa o Open-Meteo, grátis e sem cadastro. Atualiza a cada 30 minutos.", 13, C.muted, lineHeight = 19)
+    var found by remember { mutableStateOf<List<Weather.Place>>(emptyList()) }
+    var msg by remember { mutableStateOf("") }
+    fun searchCity(q: String) {
+        if (q.isBlank()) return
+        msg = "Procurando \"$q\"…"; found = emptyList()
+        Weather.search(q) { l, m -> found = l; msg = if (l.isNotEmpty()) "Escolha a cidade certa:" else m }
+    }
+    T("Mostra o clima no topo da tela, ao lado do relógio. Usa o Open-Meteo, grátis e sem cadastro. Atualiza a cada 30 minutos.", 13, C.muted, lineHeight = 19)
     Seg("Clima no topo", listOf(1 to "Ligado", 0 to "Desligado"), if (on) 1 else 0, locked) { on = it == 1; st.prefs.weather = on }
-    FieldRow(st, "Cidade", city, locked, hint = "Ex.: Rio de Janeiro") { v -> city = v.trim(); st.prefs.city = city; Weather.refresh(city, true) }
-    Weather.now?.let { w -> if (city.isNotBlank()) KV(listOf("Cidade" to w.city, "Agora" to "${w.icon} ${w.temp}° · ${w.desc}", "Hoje" to "máx. ${w.max}° · mín. ${w.min}°")) }
+    KV(listOf("Cidade salva" to city.ifBlank { "nenhuma" }) + (Weather.now?.takeIf { city.isNotBlank() }?.let { w -> listOf("Agora" to "${w.icon} ${w.temp}° · ${w.desc}", "Hoje" to "máx. ${w.max}° · mín. ${w.min}°") } ?: emptyList()))
+    FieldRow(st, "Procurar cidade", "", locked, hint = "Digite o nome e aperte OK (ex.: Niterói)") { v -> searchCity(v) }
+    if (msg.isNotBlank()) T(msg, 13, if (found.isNotEmpty()) C.a1 else C.muted, FontWeight.SemiBold)
+    if (found.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        found.forEach { p ->
+            Btn(p.label, on = p.label == city, locked = locked) {
+                city = p.label; st.prefs.city = p.label; st.prefs.cityPos = "${p.lat},${p.lon}"
+                found = emptyList(); msg = "Cidade salva: ${p.label}"
+                Weather.refresh(p.label, true, "${p.lat},${p.lon}")
+                st.say("Clima de ${p.name} no topo da tela")
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Btn("Atualizar agora", locked = locked) { Weather.refresh(city, true, st.prefs.cityPos) }
+        if (city.isNotBlank()) Btn("Apagar cidade", locked = locked) { city = ""; st.prefs.city = ""; st.prefs.cityPos = ""; Weather.now = null; msg = "" }
+    }
     if (Weather.status.isNotBlank()) T(Weather.status, 12, C.bad)
-    Btn("Atualizar agora", locked = locked) { Weather.refresh(city, true) }
 }
 
 // ---------------- Mapear controle remoto ----------------

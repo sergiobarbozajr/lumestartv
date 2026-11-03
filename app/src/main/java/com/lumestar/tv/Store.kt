@@ -75,7 +75,8 @@ object Store {
         activeAcc = sp.getInt("contaAtiva", -1)
         try {
             val a = JSONArray(sp.getString("listas", "[]"))
-            for (i in 0 until a.length()) { val o = a.getJSONObject(i); lists.add(ListSrc(o.optString("name"), o.optString("url"), o.optString("info"))) }
+            for (i in 0 until a.length()) { val o = a.getJSONObject(i); val u = o.optString("url"); if (!hasList(u)) lists.add(ListSrc(o.optString("name"), u, o.optString("info"))) else removedDup++ }
+            if (removedDup > 0) saveLists()
         } catch (e: Exception) {}
         favs.addAll(sp.getString("favoritos", "")!!.split("\n").filter { it.isNotEmpty() })
         seen.addAll(sp.getString("vistos", "")!!.split("\n").filter { it.isNotEmpty() })
@@ -90,6 +91,26 @@ object Store {
         val a = JSONArray()
         accounts.forEach { x -> a.put(JSONObject().put("name", x.name).put("url", x.url).put("user", x.user).put("pass", Secret.enc(x.pass)).put("info", x.info).put("ok", x.ok)) }
         sp.edit().putString("contas", a.toString()).putInt("contaAtiva", activeAcc).apply()
+    }
+
+    /** Quantas listas repetidas foram tiradas ao abrir o app (para avisar uma vez). */
+    var removedDup = 0
+
+    /** Endereço "limpo" para comparar: sem espaços, sem barra no fim, protocolo e servidor em minúsculas, sem http/https de diferença. */
+    fun normUrl(u: String): String {
+        var x = u.trim()
+        val i = x.indexOf("://")
+        if (i > 0) { val rest = x.substring(i + 3); val slash = rest.indexOf('/').let { if (it < 0) rest.length else it }; x = rest.substring(0, slash).lowercase().removePrefix("www.") + rest.substring(slash) }
+        x = x.removeSuffix("/").removeSuffix("?")
+        return x
+    }
+
+    fun hasList(u: String): Boolean { val n = normUrl(u); return n.isNotEmpty() && lists.any { normUrl(it.url) == n } }
+
+    /** Adiciona a lista se ainda não existir. Devolve false quando já estava salva. */
+    fun addList(name: String, url: String): Boolean {
+        if (hasList(url)) return false
+        lists.add(ListSrc(name, url.trim())); saveLists(); return true
     }
 
     fun saveLists() {

@@ -73,7 +73,8 @@ object PhoneServer {
             val ok = (form["tipo"] == "lista" && form["url"].orEmpty().contains("://")) ||
                 (form["tipo"] == "tmdb" && form["chave"].orEmpty().length >= 20) ||
                 (form["tipo"] == "conta" && form["servidor"].orEmpty().isNotBlank() && form["usuario"].orEmpty().isNotBlank() && form["senha"].orEmpty().isNotBlank())
-            msg = if (ok) { main.post { onReceive?.invoke(form) }; "<p class=ok>Enviado! Confira na TV.</p>" } else "<p class=err>Preencha todos os campos.</p>"
+            val dup = ok && form["tipo"] == "lista" && Store.hasList(form["url"].orEmpty())
+            msg = if (dup) "<p class=err>Essa lista já está salva na TV. Não foi enviada de novo.</p>" else if (ok) { main.post { onReceive?.invoke(form) }; "<p class=ok>Enviado! Confira na TV.</p>" } else "<p class=err>Preencha todos os campos.</p>"
         }
         val html = page(msg).toByteArray(Charsets.UTF_8)
         val out = c.getOutputStream()

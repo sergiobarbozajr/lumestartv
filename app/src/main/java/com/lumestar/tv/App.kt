@@ -291,8 +291,9 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
 @Composable
 private fun TopBar(st: AppState) {
     var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) { if (Store.removedDup > 0) { delay(6000); st.say("${Store.removedDup} lista(s) repetida(s) foram removidas."); Store.removedDup = 0 } }
     LaunchedEffect(Unit) { if (CrashLog.fresh) { delay(4000); st.say("O app fechou sozinho da última vez. O motivo está em Configurações › Sobre o aparelho.") } }
-    LaunchedEffect(Unit) { var n = 0; while (true) { now = Date(); if (n++ % 8 == 0 && st.prefs.weather) Weather.refresh(st.prefs.city); delay(15000) } }
+    LaunchedEffect(Unit) { var n = 0; while (true) { now = Date(); if (n++ % 8 == 0 && st.prefs.weather) Weather.refresh(st.prefs.city, pos = st.prefs.cityPos); delay(15000) } }
     val pt = Locale("pt", "BR")
     Row(
         Modifier.fillMaxWidth().padding(top = 16.dp, end = 24.dp).graphicsLayer { alpha = Opening.block(st.openT, 0) },
@@ -330,7 +331,7 @@ private fun Sidebar(st: AppState, locked: Boolean) {
     ) {
         // logo: só o "L" fechado; "LumeStarTV" com o menu aberto
         Box(Modifier.height(40.dp).fillMaxWidth().clipToBounds().graphicsLayer { alpha = Opening.item(st.openT, 0) }, contentAlignment = Alignment.CenterStart) {
-            val logo = TextStyle(fontFamily = F.logo, fontSize = 30.sp)
+            val logo = TextStyle(fontFamily = F.logo, fontSize = 36.sp)
             Box(Modifier.padding(start = 6.dp)) {
                 GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo)
                 GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo, Modifier.offset(y = 24.dp).graphicsLayer { scaleY = -1f; alpha = .22f })
@@ -468,6 +469,7 @@ private val CFG = listOf(
     Cfg("sobre", "Sobre o aparelho", 1, ""),
 )
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun Settings(st: AppState, locked: Boolean) {
     var sel by remember { mutableStateOf(st.cfgSel) }
@@ -477,8 +479,10 @@ private fun Settings(st: AppState, locked: Boolean) {
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Block(st, 2) {
-                Column(Modifier.width(230.dp).fillMaxHeight().verticalScroll(rememberScrollState()).focusGroup().padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    CFG.forEach { c -> CfgItem(c, sel == c.id, locked) { sel = c.id } }
+                // ao voltar do painel para a lista, o foco vai para a opção aberta (não para a mais próxima na altura)
+                val reqs = remember { CFG.associate { it.id to FocusRequester() } }
+                Column(Modifier.width(230.dp).fillMaxHeight().focusProperties { enter = { reqs[sel] ?: FocusRequester.Default } }.verticalScroll(rememberScrollState()).focusGroup().padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    CFG.forEach { c -> Box(Modifier.focusRequester(reqs.getValue(c.id))) { CfgItem(c, sel == c.id, locked) { sel = c.id } } }
                 }
             }
             Block(st, 3) {

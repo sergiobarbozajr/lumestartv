@@ -30,18 +30,39 @@ object Weather {
         else -> "☁" to "—"
     }
 
-    /** Busca de novo se mudou a cidade ou se passaram 30 minutos. */
-    fun refresh(city: String, force: Boolean = false) {
+    class Place(val name: String, val region: String, val country: String, val lat: Double, val lon: Double) {
+        val label get() = listOf(name, region, country).filter { it.isNotBlank() }.distinct().joinToString(", ")
+    }
+
+    /** Procura cidades pelo nome (até 8), para a pessoa escolher a certa. */
+    fun search(q: String, cb: (List<Place>, String) -> Unit) {
+        Thread {
+            val r = try {
+                val g = JSONObject(Net.text("https://geocoding-api.open-meteo.com/v1/search?count=8&language=pt&name=" + URLEncoder.encode(q.trim().substringBefore(','), "UTF-8")))
+                val a = g.optJSONArray("results"); val out = ArrayList<Place>()
+                if (a != null) for (i in 0 until a.length()) { val p = a.getJSONObject(i); out.add(Place(p.optString("name"), p.optString("admin1"), p.optString("country"), p.optDouble("latitude"), p.optDouble("longitude"))) }
+                out to (if (out.isEmpty()) "Nenhuma cidade encontrada com esse nome." else "")
+            } catch (e: Throwable) { emptyList<Place>() to "Não consegui procurar: " + Net.why(e) }
+            main.post { cb(r.first, r.second) }
+        }.start()
+    }
+
+    /** Busca de novo se mudou a cidade ou se passaram 30 minutos. pos = "lat,lon" da cidade escolhida. */
+    fun refresh(city: String, force: Boolean = false, pos: String = "") {
         val c = city.trim()
         if (c.isEmpty()) { now = null; return }
         if (!force && c == lastCity && System.currentTimeMillis() - lastAt < 30 * 60_000) return
         lastCity = c; lastAt = System.currentTimeMillis()
         Thread {
             val r = try {
-                val g = JSONObject(Net.text("https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name=" + URLEncoder.encode(c.substringBefore(','), "UTF-8")))
-                val p = g.optJSONArray("results")?.optJSONObject(0) ?: throw java.io.IOException("cidade não encontrada")
-                val name = p.optString("name")
-                val w = JSONObject(Net.text("https://api.open-meteo.com/v1/forecast?latitude=${p.optDouble("latitude")}&longitude=${p.optDouble("longitude")}&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto"))
+                var lat = pos.substringBefore(',', "").toDoubleOrNull(); var lon = pos.substringAfter(',', "").toDoubleOrNull()
+                var name = c.substringBefore(',')
+                if (lat == null || lon == null) {
+                    val g = JSONObject(Net.text("https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name=" + URLEncoder.encode(c.substringBefore(','), "UTF-8")))
+                    val p = g.optJSONArray("results")?.optJSONObject(0) ?: throw java.io.IOException("cidade não encontrada")
+                    name = p.optString("name"); lat = p.optDouble("latitude"); lon = p.optDouble("longitude")
+                }
+                val w = JSONObject(Net.text("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto"))
                 val cur = w.getJSONObject("current"); val d = w.getJSONObject("daily")
                 val (ic, desc) = icon(cur.optInt("weather_code"), cur.optInt("is_day", 1) == 1)
                 Now(name, Math.round(cur.optDouble("temperature_2m")).toInt(), ic, desc, Math.round(d.getJSONArray("temperature_2m_max").optDouble(0)).toInt(), Math.round(d.getJSONArray("temperature_2m_min").optDouble(0)).toInt()) to ""

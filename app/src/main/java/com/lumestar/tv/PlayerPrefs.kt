@@ -49,7 +49,8 @@ object PP {
     var contrast by IntP("contraste", 0)
     var sat by IntP("cor", 0)
     var enhance by StrP("realce", "auto")      // off | auto | baixa | media | alta | ultra
-    var quality by StrP("qualidade", "auto")   // auto | 480 | 720 | 1080 | 2160
+    var quality by StrP("qualidade", "auto")
+    var aiUp by StrP("reforcoIa", "auto")      // auto | off — IA que reconstrói vídeo abaixo de 1080p   // auto | 480 | 720 | 1080 | 2160
     // tela
     var fit by IntP("telaModo", 0)              // 0 original · 1 preencher · 2 zoom
     var fitV by IntP("telaVertical", 0)

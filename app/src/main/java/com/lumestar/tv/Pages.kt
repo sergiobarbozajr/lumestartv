@@ -87,7 +87,7 @@ fun HomePage(st: AppState, locked: Boolean) {
         item {
             if (hero.isNotEmpty()) Hero(st, hero, locked) else Column(Modifier.padding(start = 28.dp, top = 56.dp)) {
                 T("Bem-vindo ao", 15, C.muted, FontWeight.SemiBold)
-                GradientText("LumeStarTV", androidx.compose.ui.text.TextStyle(fontFamily = F.logo, fontSize = 64.sp))
+                GradientText("LumeStarTV", androidx.compose.ui.text.TextStyle(fontFamily = F.logo, fontSize = 76.sp))
             }
         }
         item { Loading() }
