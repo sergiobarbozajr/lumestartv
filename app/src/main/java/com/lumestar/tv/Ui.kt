@@ -185,7 +185,9 @@ fun heroFrom(items: List<Item>, n: Int = 6): List<HeroEntry> {
         // TV ao vivo: um canal de cada categoria, de preferência com logo
         return items.groupBy { it.group }.values.mapNotNull { g -> g.firstOrNull { it.logo.isNotBlank() } ?: g.firstOrNull() }.take(n).map { heroOf(it) }
     }
-    val withImg = items.filter { it.kind != LIVE && (it.logo.isNotBlank() || Tmdb.poster(it).isNotBlank()) }
+    // rápido mesmo com dezenas de milhares de títulos: só olha o que já está guardado
+    val withImg = ArrayList<Item>()
+    for (it in items) { if (it.kind != LIVE && (it.logo.isNotBlank() || Tmdb.cachedPoster(it).isNotBlank())) { withImg.add(it); if (withImg.size >= 400) break } }
     val pool = (if (withImg.size >= 3) withImg else items).sortedWith(compareByDescending<Item> { it.year }.thenBy { it.title.hashCode() })
     return pool.take(n).map { heroOf(it) }
 }

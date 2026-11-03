@@ -73,19 +73,34 @@ object Tmdb {
 
     fun clear() { cache.clear(); file.delete(); rev++ }
 
-    private fun cacheKey(it: Item) = (if (it.kind == SERIES) "s:" else "f:") + clean(it.title) + "|" + it.year
+    /** chave de cada título, calculada uma vez só */
+    private val keys = ConcurrentHashMap<String, String>()
+    private fun cacheKey(it: Item) = keys.getOrPut(it.id) { (if (it.kind == SERIES) "s:" else "f:") + clean(it.title) + "|" + it.year }
+
+    /** Só consulta o que já foi baixado (rápido; não agenda busca). */
+    fun cachedPoster(it: Item): String {
+        if (it.kind == LIVE || cache.isEmpty()) return ""
+        return cache[cacheKey(it)]?.takeIf { m -> m.tid > 0 }?.posterUrl() ?: ""
+    }
 
     /** Tira do nome o que atrapalha a busca: [4K], (Dublado), LEG, ano, etc. */
+    private val RX_BR = Regex("\\[[^]]*]|\\([^)]*\\)|\\{[^}]*}")
+    private val RX_TAGS = Regex("(?i)\\b(4k|uhd|fhd|full ?hd|hd|sd|1080p|720p|2160p|h265|hevc|dublado|dub|legendado|leg|nacional|dual ?audio|multi|cam|ts|hdr|10bit|s\\d{1,2}e\\d{1,3})\\b")
+    private val RX_YEAR = Regex("\\b(19|20)\\d{2}\\b")
+    private val RX_SEP = Regex("[|_.:\\-–]+")
+    private val RX_SP = Regex("\\s+")
+
     fun clean(t: String): String {
-        var s = t.replace(Regex("\\[[^]]*]|\\([^)]*\\)|\\{[^}]*}"), " ")
-        s = s.replace(Regex("(?i)\\b(4k|uhd|fhd|full ?hd|hd|sd|1080p|720p|2160p|h265|hevc|dublado|dub|legendado|leg|nacional|dual ?audio|multi|cam|ts|hdr|10bit|s\\d{1,2}e\\d{1,3})\\b"), " ")
-        s = s.replace(Regex("\\b(19|20)\\d{2}\\b"), " ").replace(Regex("[|_.:\\-–]+"), " ")
-        return s.replace(Regex("\\s+"), " ").trim()
+        var s = RX_BR.replace(t, " ")
+        s = RX_TAGS.replace(s, " ")
+        s = RX_SEP.replace(RX_YEAR.replace(s, " "), " ")
+        return RX_SP.replace(s, " ").trim()
     }
 
     /** O que já se sabe deste título. Se ainda não buscou, agenda a busca (e a tela atualiza sozinha). */
     fun meta(it: Item): Meta? {
         if (it.kind == LIVE) return null
+        if (!on && cache.isEmpty()) return null // sem chave e nada guardado: não gasta tempo
         val k = cacheKey(it)
         cache[k]?.let { m -> return if (m.tid > 0) m else null }
         if (on && pending.add(k)) pool.execute { fetch(it, k) }

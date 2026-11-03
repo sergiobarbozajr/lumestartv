@@ -291,6 +291,7 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
 @Composable
 private fun TopBar(st: AppState) {
     var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) { if (CrashLog.fresh) { delay(4000); st.say("O app fechou sozinho da última vez. O motivo está em Configurações › Sobre o aparelho.") } }
     LaunchedEffect(Unit) { var n = 0; while (true) { now = Date(); if (n++ % 8 == 0 && st.prefs.weather) Weather.refresh(st.prefs.city); delay(15000) } }
     val pt = Locale("pt", "BR")
     Row(
@@ -557,7 +558,16 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
         "contas" -> AccountsPanel(st, locked)
         "listas" -> ListsPanel(st, locked)
         "adulto" -> AdultPanel(st, locked)
-        "sobre" -> KV(deviceInfo(ctx))
+        "sobre" -> {
+            KV(deviceInfo(ctx))
+            var err by remember { mutableStateOf(CrashLog.last) }
+            if (err.isNotBlank()) {
+                LaunchedEffect(Unit) { CrashLog.markSeen(ctx) }
+                T("ÚLTIMO ERRO (o app fechou sozinho)", 10, C.bad, FontWeight.Bold)
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.bg).padding(12.dp)) { T(err.lines().take(14).joinToString("\n"), 10, C.muted, lineHeight = 13) }
+                Btn("Apagar registro de erro", locked = locked) { CrashLog.clear(); err = "" }
+            }
+        }
         "stream" -> StreamPanel(st, locked)
         "web" -> WebPanel(st, locked)
         "proxy" -> ProxyPanel(st, locked)
