@@ -241,6 +241,7 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
             if (st.openT >= Opening.END) break
         }
         st.openT = -1f
+        withFrameNanos { }; withFrameNanos { }
         args.page?.let { p -> if (MENU.any { it.id == p }) st.page = p }
         try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
         args.url?.let { u -> st.play(PlayReq("teste:" + u.hashCode(), "Teste de reprodução", u, !u.contains(".mp4"), 0L, "Teste")) }

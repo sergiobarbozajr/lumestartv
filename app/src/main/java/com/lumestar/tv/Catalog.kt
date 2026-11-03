@@ -55,18 +55,31 @@ object Classifier {
 
     fun isAdult(group: String, name: String) = adultRx.containsMatchIn(norm("$group $name"))
 
-    /** Abas de um item: canais sempre em TV ao vivo e, se forem de esporte, notícia etc., também na aba do assunto. */
+    /**
+     * Abas de um item. Um título pode estar em mais de uma aba: um filme de animação fica em Filmes e em Infantil;
+     * um canal de esporte fica em TV ao vivo e em Esportes.
+     */
     fun tabs(kind: Int, group: String, name: String): Set<String> {
         val g = norm(group); val n = norm(name)
-        var hit: String? = null
-        for ((t, re) in rules) if (g.isNotEmpty() && re.containsMatchIn(g)) { hit = t; break }
-        if (hit == null) for ((t, re) in rules) if (re.containsMatchIn(n)) { hit = t; break }
-        val h: String = hit ?: ""
-        return when (kind) {
-            LIVE -> if (h == "musicas") setOf("musicas") else if (h.isNotEmpty() && h != "filmes" && h != "series" && h != "novelas") setOf("aovivo", h) else setOf("aovivo")
-            SERIES -> setOf(if (h == "novelas" || h == "infantil" || h == "documentarios") h else "series")
-            else -> setOf(when (h) { "infantil", "documentarios", "esportes", "novelas" -> h; "series" -> "series"; else -> "filmes" })
+        var hits = rules.filter { (_, re) -> g.isNotEmpty() && re.containsMatchIn(g) }.map { it.first }.toSet()
+        if (hits.isEmpty()) hits = rules.filter { (_, re) -> re.containsMatchIn(n) }.map { it.first }.toSet()
+        val out = LinkedHashSet<String>()
+        when (kind) {
+            LIVE -> {
+                if ("musicas" in hits && hits.size == 1) out.add("musicas") else out.add("aovivo")
+                out.addAll(hits.intersect(setOf("esportes", "noticias", "infantil", "documentarios")))
+            }
+            SERIES -> {
+                if ("novelas" in hits) out.add("novelas") else out.add("series")
+                out.addAll(hits.intersect(setOf("infantil", "documentarios")))
+            }
+            else -> {
+                if ("novelas" in hits) out.add("novelas")
+                else if ("filmes" in hits || hits.none { it in setOf("infantil", "documentarios", "esportes") }) out.add("filmes")
+                out.addAll(hits.intersect(setOf("infantil", "documentarios", "esportes")))
+            }
         }
+        return out
     }
 
     fun yearOf(title: String, explicit: String = ""): Int {

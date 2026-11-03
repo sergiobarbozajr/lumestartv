@@ -61,14 +61,18 @@ private fun fmt(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, x) else "%d:%02d".format(m, x)
 }
 
+private const val UA_APP = "LumeStarTV/0.2 (Linux; Android) ExoPlayerLib/1.3.1"
+private const val UA_VLC = "VLC/3.0.20 LibVLC/3.0.20"
+
 @OptIn(UnstableApi::class)
-private fun buildPlayer(ctx: android.content.Context): ExoPlayer {
-    val http = DefaultHttpDataSource.Factory()
-        .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
-        .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(15000).setReadTimeoutMs(30000)
-    return ExoPlayer.Builder(ctx).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(ctx, http))).build()
-}
+private fun httpFactory(): DefaultHttpDataSource.Factory = DefaultHttpDataSource.Factory()
+    .setUserAgent(UA_APP)
+    .setAllowCrossProtocolRedirects(true)
+    .setConnectTimeoutMs(15000).setReadTimeoutMs(30000)
+
+@OptIn(UnstableApi::class)
+private fun buildPlayer(ctx: android.content.Context, http: DefaultHttpDataSource.Factory): ExoPlayer =
+    ExoPlayer.Builder(ctx).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(ctx, http))).build()
 
 private fun mediaItem(url: String): MediaItem {
     val low = url.lowercase()
@@ -88,7 +92,9 @@ private fun mediaItem(url: String): MediaItem {
 @Composable
 fun PlayerScreen(st: AppState, req: PlayReq) {
     val ctx = LocalContext.current
-    val player = remember { buildPlayer(ctx) }
+    val http = remember { httpFactory() }
+    val player = remember { buildPlayer(ctx, http) }
+    var triedVlc by remember(req) { mutableStateOf(false) }
     var url by remember(req) { mutableStateOf(req.url) }
     var triedTs by remember(req) { mutableStateOf(false) }
     var playing by remember { mutableStateOf(true) }
@@ -112,6 +118,9 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
             }
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
             override fun onPlayerError(e: PlaybackException) {
+                // alguns servidores de IPTV só aceitam o "nome" do VLC: tenta de novo na hora com ele
+                val bad = e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
+                if (bad && !triedVlc) { triedVlc = true; http.setUserAgent(UA_VLC); attempt++; return }
                 if (req.live && !triedTs && url.contains(".m3u8") && req.ext == "ts") {
                     triedTs = true; url = url.replace(".m3u8", ".ts"); attempt++; return
                 }

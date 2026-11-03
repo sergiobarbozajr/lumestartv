@@ -41,6 +41,11 @@ key KEYCODE_DPAD_CENTER 1
 sleep 14
 shot "reproduzindo_canal"
 key KEYCODE_BACK 2
+abre --es pagina series
+key KEYCODE_DPAD_RIGHT 1.2
+key KEYCODE_DPAD_CENTER 3
+shot "serie_detalhe"
+key KEYCODE_BACK 1.5
 abre --es abrir "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 sleep 10
 shot "reproduzindo_filme"
