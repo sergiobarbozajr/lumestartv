@@ -24,7 +24,9 @@ abre() { adb shell am force-stop $PKG; adb shell am start -n $PKG/.MainActivity 
 
 # "Enviar pelo celular": abre Configurações › Contas IPTV (liga a página na rede) e envia a lista de teste
 abre --es pagina config
-key KEYCODE_DPAD_RIGHT 2
+key KEYCODE_DPAD_RIGHT 1
+for i in $(seq 1 12); do key KEYCODE_DPAD_UP 0.3; done
+sleep 2
 shot "config_contas"
 adb forward tcp:8765 tcp:8765
 URLQ=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$LISTA")
