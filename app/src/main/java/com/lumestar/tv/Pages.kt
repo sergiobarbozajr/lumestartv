@@ -172,7 +172,7 @@ fun ReleasesPage(st: AppState, locked: Boolean) {
         item { Loading() }
         item { T("${all.size} títulos lançados em ${Catalog.year}", 12, C.muted, modifier = Modifier.padding(start = 28.dp, top = 6.dp)) }
         if (all.isEmpty()) item { Box(Modifier.padding(start = 28.dp, top = 10.dp)) { if (Catalog.items.isEmpty()) EmptySources(st, locked) else T("Nenhum título de ${Catalog.year} na sua lista.", 13, C.muted) } }
-        byTab.forEach { (t, l) -> item(key = "rel-$t") { Box(Modifier.padding(start = 28.dp)) { ItemRow(st, t, l.sortedBy { norm(it.title) }, locked) } } }
+        byTab.forEach { (t, l) -> item(key = "rel-$t") { Box(Modifier.padding(start = 28.dp)) { ItemRow(st, t, l.sortedBy { it.nt }, locked) } } }
     }
 }
 

@@ -176,6 +176,8 @@ object Xtream {
 
 /** Listas por endereço: M3U, M3U8 (lista de canais), JSON e TXT. */
 object Lists {
+    private val VIDEO_RX = Regex("\\.(mp4|mkv|avi|mov)(\\?|$)")
+    private val ATTR_RX = HashMap<String, Regex>()
     private val epRx = Regex("^(.*?)[\\s._-]*[Ss](\\d{1,2})\\s*[Ee](\\d{1,3})")
 
     fun load(ls: ListSrc): List<Item> {
@@ -206,7 +208,7 @@ object Lists {
                 return@forEachIndexed
             }
             val kind = when {
-                low.contains("/movie/") || Regex("\\.(mp4|mkv|avi|mov)(\\?|$)").containsMatchIn(low) -> MOVIE
+                low.contains("/movie/") || VIDEO_RX.containsMatchIn(low) -> MOVIE
                 else -> LIVE
             }
             out.add(Item("$src:$i:" + norm(name).hashCode().toUInt().toString(16), name, group, kind, u, logo, Classifier.yearOf(name), "", "", "", src,
@@ -221,7 +223,7 @@ object Lists {
         return out
     }
 
-    private fun attr(l: String, k: String) = Regex("$k=\"([^\"]*)\"").find(l)?.groupValues?.get(1) ?: ""
+    private fun attr(l: String, k: String) = ATTR_RX.getOrPut(k) { Regex("$k=\"([^\"]*)\"") }.find(l)?.groupValues?.get(1) ?: ""
 
     fun m3u(body: String): List<Triple<String, String, Pair<String, String>>> {
         val out = ArrayList<Triple<String, String, Pair<String, String>>>()

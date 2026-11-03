@@ -32,11 +32,18 @@ class Item(
     val tabs: Set<String>,
     val adult: Boolean,
     val ext: String = "",
-)
+) {
+    /** título normalizado, calculado uma vez (ordenar e pesquisar ficam rápidos) */
+    val nt: String = norm(title)
+}
 
 class Episode(val id: String, val season: Int, val num: Int, val title: String, val url: String, val plot: String)
 
-fun norm(s: String): String = Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase()
+private val MARKS = Regex("\\p{M}+")
+private val YEAR_RX = Regex("[(\\[](\\d{4})[)\\]]")
+
+/** Texto sem acentos e em minúsculas, para ordenar e pesquisar (padrão compilado uma vez só). */
+fun norm(s: String): String = MARKS.replace(Normalizer.normalize(s, Normalizer.Form.NFD), "").lowercase()
 
 /** Organiza cada item nas abas certas pelo grupo (group-title) e pelo nome, como no simulador. */
 object Classifier {
@@ -84,7 +91,7 @@ object Classifier {
 
     fun yearOf(title: String, explicit: String = ""): Int {
         explicit.trim().take(4).toIntOrNull()?.let { if (it in 1900..2100) return it }
-        return Regex("[(\\[](\\d{4})[)\\]]").find(title)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 1900..2100 } ?: 0
+        return YEAR_RX.find(title)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 1900..2100 } ?: 0
     }
 }
 
@@ -103,21 +110,40 @@ object Catalog {
 
     fun visible(i: Item) = Store.adultOpen || !i.adult
 
-    fun publish(list: List<Item>) {
+    /** Catálogo já separado e ordenado. Montado em segundo plano, nunca na linha da tela. */
+    class Built(val items: List<Item>, val byId: Map<String, Item>, val byTab: Map<String, List<Pair<String, List<Item>>>>)
+
+    fun build(list: List<Item>): Built {
         val dedup = LinkedHashMap<String, Item>()
         list.forEach { dedup.putIfAbsent(it.id, it) }
         val all = dedup.values.toList()
         val tabs = HashMap<String, HashMap<String, ArrayList<Item>>>()
         for (it in all) for (t in it.tabs) tabs.getOrPut(t) { HashMap() }.getOrPut(it.group.ifBlank { "Sem categoria" }) { ArrayList() }.add(it)
-        val cmp = Comparator<String> { a, b -> norm(a).compareTo(norm(b)) }
         val out = HashMap<String, List<Pair<String, List<Item>>>>()
-        for ((t, groups) in tabs) out[t] = groups.entries.sortedWith { a, b -> cmp.compare(a.key, b.key) }.map { (g, l) -> g to l.sortedWith { a, b -> cmp.compare(a.title, b.title) } }
-        items = all; byId = dedup; byTab = out
+        for ((t, groups) in tabs) {
+            out[t] = groups.entries.map { Triple(norm(it.key), it.key, it.value) }.sortedBy { it.first }
+                .map { (_, g, l) -> g to l.sortedBy { it.nt } }
+        }
+        return Built(all, dedup, out)
+    }
+
+    /** Só troca as referências (instantâneo); chamar na linha da tela. */
+    fun apply(b: Built) {
+        items = b.items; byId = b.byId; byTab = b.byTab
+        rowsCache.clear()
         rev++
     }
 
-    fun rows(tab: String): List<Pair<String, List<Item>>> =
-        (byTab[tab] ?: emptyList()).map { (g, l) -> g to l.filter { visible(it) } }.filter { it.second.isNotEmpty() }
+    fun publish(list: List<Item>) = apply(build(list))
+
+    private val rowsCache = HashMap<String, List<Pair<String, List<Item>>>>()
+
+    fun rows(tab: String): List<Pair<String, List<Item>>> {
+        val key = tab + "|" + Store.adultOpen
+        return rowsCache.getOrPut(key) {
+            (byTab[tab] ?: emptyList()).map { (g, l) -> g to (if (Store.adultOpen) l else l.filter { visible(it) }) }.filter { it.second.isNotEmpty() }
+        }
+    }
 
     fun count(tab: String) = rows(tab).sumOf { it.second.size }
 
@@ -126,8 +152,8 @@ object Catalog {
     fun search(q: String, limit: Int = 60): List<Item> {
         val n = norm(q.trim())
         if (n.length < 1) return emptyList()
-        return items.asSequence().filter { visible(it) && norm(it.title).contains(n) }
-            .sortedBy { if (norm(it.title).startsWith(n)) 0 else 1 }.take(limit).toList()
+        return items.asSequence().filter { visible(it) && it.nt.contains(n) }
+            .sortedBy { if (it.nt.startsWith(n)) 0 else 1 }.take(limit).toList()
     }
 
     // ---------- guardar no aparelho, para abrir rápido ----------
@@ -151,7 +177,8 @@ object Catalog {
                 }
                 r.endArray()
             }
-            android.os.Handler(android.os.Looper.getMainLooper()).post { if (items.isEmpty()) publish(list) }
+            val b = build(list)
+            android.os.Handler(android.os.Looper.getMainLooper()).post { if (items.isEmpty()) apply(b) }
         } catch (e: Throwable) { f.delete() }
     }
 
@@ -195,8 +222,9 @@ object Catalog {
             val msg = if (notes.isEmpty()) "Nenhuma conta ou lista configurada." else notes.joinToString(" · ")
             val ok = all.isNotEmpty() || (acc == null || !acc.filled) && Store.lists.isEmpty()
             if (ok) saveCache(c, all)
+            val built = if (ok) build(all) else null
             main.post {
-                if (ok) publish(all)
+                if (built != null) apply(built)
                 Store.saveLists()
                 loading = false
                 status = msg
