@@ -84,7 +84,7 @@ object Tmdb {
     }
 
     /** Tira do nome o que atrapalha a busca: [4K], (Dublado), LEG, ano, etc. */
-    private val RX_BR = Regex("\\[[^]]*]|\\([^)]*\\)|\\{[^}]*}")
+    private val RX_BR = Regex("\\[[^\\]]*\\]|\\([^)]*\\)|\\{[^}]*\\}")
     private val RX_TAGS = Regex("(?i)\\b(4k|uhd|fhd|full ?hd|hd|sd|1080p|720p|2160p|h265|hevc|dublado|dub|legendado|leg|nacional|dual ?audio|multi|cam|ts|hdr|10bit|s\\d{1,2}e\\d{1,3})\\b")
     private val RX_YEAR = Regex("\\b(19|20)\\d{2}\\b")
     private val RX_SEP = Regex("[|_.:\\-–]+")
