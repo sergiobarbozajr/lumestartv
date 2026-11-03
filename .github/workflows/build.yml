@@ -38,6 +38,7 @@ jobs:
       - name: Compilar o APK
         env:
           TMDB_KEY: ${{ secrets.TMDB_KEY }}
+          TMDB_KEY_2: ${{ secrets.TMDB_KEY_2 }}
         run: gradle :app:assembleRelease --no-daemon 2>&1 | tee build.log; test ${PIPESTATUS[0]} -eq 0
 
       - name: Mostrar erros de compilacao

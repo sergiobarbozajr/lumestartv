@@ -42,7 +42,9 @@ object Tmdb {
     /** chave do usuário (Configurações) ou, se não houver, a chave padrão do app */
     var userKey: String = ""
         private set
-    val key: String get() = userKey.ifBlank { BuildConfig.TMDB_KEY }
+    /** usa a chave reserva (TMDB_KEY_2) quando a principal é recusada */
+    @Volatile private var backup = false
+    val key: String get() = userKey.ifBlank { if (backup || BuildConfig.TMDB_KEY.isBlank()) BuildConfig.TMDB_KEY2 else BuildConfig.TMDB_KEY }
     private var testKey: String? = null
     private val useKey get() = testKey ?: key
 
@@ -136,6 +138,7 @@ object Tmdb {
             main.post { rev++ }
             scheduleSave()
         } catch (e: java.io.IOException) {
+            if (e.message?.contains("401") == true && userKey.isBlank() && !backup && BuildConfig.TMDB_KEY2.isNotBlank() && BuildConfig.TMDB_KEY.isNotBlank()) { backup = true; pending.remove(k); return }
             if (e.message?.contains("401") == true) { keyBad = true; main.post { status = "A chave do TMDB foi recusada. Confira em Configurações › Capas e sinopses."; rev++ } }
         } catch (e: Exception) {
         } finally { pending.remove(k) }
