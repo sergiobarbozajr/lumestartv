@@ -298,6 +298,17 @@ object Synth {
         return toPcm(b.d)
     }
 
+    /** Tecla do teclado virtual: batida abafada e encorpada. */
+    fun kbPcm(): ShortArray {
+        val b = Buf(0.12); val f = Bq().lp(520.0, 1.2); val rnd = Random(3); var p = 0.0
+        for (i in b.d.indices) {
+            val t = i.toDouble() / SR
+            p += expSweep(t, 0.04, 224.0, 140.0) / SR
+            b.d[i] = (f.run(rnd.nextDouble() * 2 - 1) * 0.10 * expDecay(t, 0.07) * 4 + sin(2 * PI * p) * 0.18 * expDecay(t, 0.12) * 2).toFloat()
+        }
+        return toPcm(b.d)
+    }
+
     fun tickPcm(): ShortArray {
         val b = Buf(0.08); val lp = Bq().lp(900.0, 0.7); var p = 0.0
         for (i in b.d.indices) {
@@ -335,6 +346,7 @@ object Sfx {
     private var tick: AudioTrack? = null
     private var ok: AudioTrack? = null
     private var long: AudioTrack? = null
+    private var kbT: AudioTrack? = null
 
     fun setVolume(level: Int) { gain = when (level) { 0 -> 0f; 1 -> 0.35f; 3 -> 1f; else -> 0.7f } }
 
@@ -359,11 +371,12 @@ object Sfx {
     }
 
     fun warmUp() = exec.execute {
-        try { if (tick == null) tick = make(Synth.tickPcm()); if (ok == null) ok = make(Synth.okPcm()) } catch (e: Throwable) {}
+        try { if (tick == null) tick = make(Synth.tickPcm()); if (ok == null) ok = make(Synth.okPcm()); if (kbT == null) kbT = make(Synth.kbPcm()) } catch (e: Throwable) {}
     }
 
     fun tick() { if (enabled && gain > 0f) exec.execute { tick?.let { replay(it) } } }
     fun ok() { if (enabled && gain > 0f) exec.execute { ok?.let { replay(it) } } }
+    fun kb() { if (enabled && gain > 0f) exec.execute { kbT?.let { replay(it) } } }
 
     /** Toca uma trilha longa (abertura) a partir de "fromSec" segundos, para ficar junto com a imagem. */
     fun playLong(pcm: ShortArray?, fromSec: Float = 0f) {

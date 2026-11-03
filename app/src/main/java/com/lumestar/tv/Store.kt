@@ -1,0 +1,125 @@
+package com.lumestar.tv
+
+import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import org.json.JSONArray
+import org.json.JSONObject
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+/** Senhas guardadas criptografadas com uma chave do próprio aparelho (Android Keystore). */
+object Secret {
+    private const val ALIAS = "lumestar-senhas"
+    private fun key(): SecretKey {
+        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        val g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        g.init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
+        return g.generateKey()
+    }
+    fun enc(plain: String): String = try {
+        if (plain.isEmpty()) "" else {
+            val c = Cipher.getInstance("AES/GCM/NoPadding"); c.init(Cipher.ENCRYPT_MODE, key())
+            Base64.encodeToString(c.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(c.doFinal(plain.toByteArray()), Base64.NO_WRAP)
+        }
+    } catch (e: Throwable) { "" }
+    fun dec(s: String): String = try {
+        if (!s.contains(":")) "" else {
+            val (iv, data) = s.split(":", limit = 2)
+            val c = Cipher.getInstance("AES/GCM/NoPadding")
+            c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
+            String(c.doFinal(Base64.decode(data, Base64.NO_WRAP)))
+        }
+    } catch (e: Throwable) { "" }
+}
+
+class Account(var name: String = "", var url: String = "", var user: String = "", var pass: String = "", var info: String = "", var ok: Boolean = false) {
+    val filled get() = url.isNotBlank() && user.isNotBlank() && pass.isNotBlank()
+}
+class ListSrc(var name: String, var url: String, var info: String = "")
+class Progress(val pos: Long, val dur: Long, val at: Long)
+
+/** Tudo o que o app guarda do usuário: contas, listas, favoritos, progresso e vistos. */
+object Store {
+    private lateinit var sp: android.content.SharedPreferences
+    /** Muda sempre que favoritos, vistos ou progresso mudam (as telas se atualizam sozinhas). */
+    var rev by mutableIntStateOf(0)
+
+    val accounts = Array(3) { Account() }
+    var activeAcc = -1
+    val lists = ArrayList<ListSrc>()
+    val favs = LinkedHashSet<String>()
+    val seen = ArrayList<String>()
+    val progress = HashMap<String, Progress>()
+    var adultPin = "0000"
+    var adultOpen = false
+
+    fun init(c: Context) {
+        sp = c.getSharedPreferences("lumestar-dados", Context.MODE_PRIVATE)
+        try {
+            val a = JSONArray(sp.getString("contas", "[]"))
+            for (i in 0 until minOf(3, a.length())) {
+                val o = a.getJSONObject(i)
+                accounts[i] = Account(o.optString("name"), o.optString("url"), o.optString("user"), Secret.dec(o.optString("pass")), o.optString("info"), o.optBoolean("ok"))
+            }
+        } catch (e: Exception) {}
+        activeAcc = sp.getInt("contaAtiva", -1)
+        try {
+            val a = JSONArray(sp.getString("listas", "[]"))
+            for (i in 0 until a.length()) { val o = a.getJSONObject(i); lists.add(ListSrc(o.optString("name"), o.optString("url"), o.optString("info"))) }
+        } catch (e: Exception) {}
+        favs.addAll(sp.getString("favoritos", "")!!.split("\n").filter { it.isNotEmpty() })
+        seen.addAll(sp.getString("vistos", "")!!.split("\n").filter { it.isNotEmpty() })
+        try {
+            val o = JSONObject(sp.getString("progresso", "{}") ?: "{}")
+            o.keys().forEach { k -> val p = o.getJSONArray(k); progress[k] = Progress(p.getLong(0), p.getLong(1), p.getLong(2)) }
+        } catch (e: Exception) {}
+        adultPin = sp.getString("pinAdulto", "0000") ?: "0000"
+    }
+
+    fun saveAccounts() {
+        val a = JSONArray()
+        accounts.forEach { x -> a.put(JSONObject().put("name", x.name).put("url", x.url).put("user", x.user).put("pass", Secret.enc(x.pass)).put("info", x.info).put("ok", x.ok)) }
+        sp.edit().putString("contas", a.toString()).putInt("contaAtiva", activeAcc).apply()
+    }
+
+    fun saveLists() {
+        val a = JSONArray()
+        lists.forEach { a.put(JSONObject().put("name", it.name).put("url", it.url).put("info", it.info)) }
+        sp.edit().putString("listas", a.toString()).apply()
+    }
+
+    fun toggleFav(id: String): Boolean {
+        val on = if (favs.contains(id)) { favs.remove(id); false } else { favs.add(id); true }
+        sp.edit().putString("favoritos", favs.joinToString("\n")).apply()
+        rev++
+        return on
+    }
+
+    fun setProgress(id: String, pos: Long, dur: Long) {
+        if (dur <= 0) return
+        if (pos >= dur * 0.95) {
+            progress.remove(id)
+            seen.remove(id); seen.add(0, id)
+            while (seen.size > 200) seen.removeAt(seen.size - 1)
+            sp.edit().putString("vistos", seen.joinToString("\n")).apply()
+        } else if (pos > 15_000) {
+            progress[id] = Progress(pos, dur, System.currentTimeMillis())
+        } else return
+        val o = JSONObject()
+        progress.entries.sortedByDescending { it.value.at }.take(100).forEach { (k, p) -> o.put(k, JSONArray().put(p.pos).put(p.dur).put(p.at)) }
+        sp.edit().putString("progresso", o.toString()).apply()
+        rev++
+    }
+
+    fun setPin(p: String) { adultPin = p; sp.edit().putString("pinAdulto", p).apply() }
+}

@@ -11,8 +11,8 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.2.0"
     }
 
     signingConfigs {
@@ -65,4 +65,14 @@ dependencies {
     implementation("androidx.compose.ui:ui-text")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")
+
+    // capas e logos
+    implementation("io.coil-kt:coil-compose:2.6.0")
+    // reprodutor (HLS, DASH, RTSP e vídeo comum)
+    val media3 = "1.3.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3")
+    implementation("androidx.media3:media3-exoplayer-dash:$media3")
+    implementation("androidx.media3:media3-exoplayer-rtsp:$media3")
+    implementation("androidx.media3:media3-ui:$media3")
 }

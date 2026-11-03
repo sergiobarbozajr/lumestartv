@@ -172,6 +172,34 @@ class AppState(val prefs: Prefs) {
     val contentReq = FocusRequester()
     var update: Updater.Check? by mutableStateOf(null)
     fun say(msg: String) { toast = msg; toastId++ }
+
+    // camadas por cima das telas
+    var detail by mutableStateOf<Item?>(null)
+    var player by mutableStateOf<PlayReq?>(null)
+    var kb by mutableStateOf<KbTarget?>(null)
+    var newsOpen by mutableStateOf<News?>(null)
+    var query by mutableStateOf("")
+    var cfgSel by mutableStateOf("contas")
+    // OK duas vezes = favoritar
+    var lastTapId: String? = null
+    var lastTapAt = 0L
+    var pendingOpen: kotlinx.coroutines.Job? = null
+    var focusTarget by mutableStateOf<FocusRequester?>(null)
+    var focusTick by mutableIntStateOf(0)
+    fun focusLater(r: FocusRequester) { focusTarget = r; focusTick++ }
+    fun play(r: PlayReq) { pendingOpen?.cancel(); player = r }
+    fun closePlayer() { player = null; refocus++ }
+    val overlay get() = detail != null || player != null || kb != null || newsOpen != null || exitAsk
+}
+
+/** Notícias do Início (carregadas em segundo plano). */
+object NewsState {
+    var list by mutableStateOf<List<News>>(emptyList())
+    var loaded by mutableStateOf(false)
+    fun load() {
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        kotlin.concurrent.thread(name = "noticias") { val l = try { NewsFeed.load() } catch (e: Throwable) { emptyList() }; main.post { list = l; loaded = true } }
+    }
 }
 
 @Composable
@@ -211,6 +239,8 @@ private fun Shell(st: AppState, finish: () -> Unit) {
         }
         st.openT = -1f
         try { st.navReq["inicio"]?.requestFocus() } catch (e: Exception) {}
+        NewsState.load()
+        Catalog.refresh(ctx)
         Updater.check(ctx) { r ->
             st.update = r
             if (r.status == "new") st.say("Nova versão ${r.remote} disponível: Configurações › Atualização do app")
@@ -225,7 +255,8 @@ private fun Shell(st: AppState, finish: () -> Unit) {
     }
     val opening by remember { derivedStateOf { st.openT >= 0f } }
     LaunchedEffect(st.refocus) { if (st.refocus > 0) { delay(60); try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {} } }
-    BackHandler(enabled = !opening) {
+    LaunchedEffect(st.focusTick) { val r = st.focusTarget; if (r != null) { delay(60); try { r.requestFocus() } catch (e: Exception) { st.refocus++ } } }
+    BackHandler(enabled = !opening && !st.overlay || st.exitAsk) {
         when {
             st.exitAsk -> st.closeExit()
             !st.navHasFocus -> try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
@@ -233,7 +264,7 @@ private fun Shell(st: AppState, finish: () -> Unit) {
             else -> st.exitAsk = true
         }
     }
-    val locked by remember { derivedStateOf { st.exitAsk || st.openT >= 0f } }
+    val locked by remember { derivedStateOf { st.overlay || st.openT >= 0f } }
     Box(Modifier.fillMaxSize()) {
         // conteúdo (templates) — nasce depois que o buraco fecha
         Box(Modifier.fillMaxSize().padding(start = 64.dp)) {
@@ -242,6 +273,10 @@ private fun Shell(st: AppState, finish: () -> Unit) {
         }
         WormholeOverlay(st)
         Sidebar(st, locked)
+        st.newsOpen?.let { NewsDialog(st, it) }
+        st.detail?.let { DetailDialog(st, it) }
+        st.kb?.let { Keyboard(st, it) }
+        st.player?.let { PlayerScreen(st, it) }
         if (st.exitAsk) ExitDialog(st, finish)
         Toast(st)
     }
@@ -347,33 +382,25 @@ private fun Block(st: AppState, i: Int, content: @Composable () -> Unit) {
 @Composable
 private fun Page(st: AppState, locked: Boolean) {
     val n = MENU.firstOrNull { it.id == st.page } ?: MENU[0]
-    if (n.id == "config") { Settings(st, locked); return }
-    Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp)) {
-        Block(st, 1) {
-            Column {
-                if (n.id == "inicio") {
-                    T("Bem-vindo ao", 15, C.muted, FontWeight.SemiBold)
-                    GradientText("LumeStarTV", TextStyle(fontFamily = F.logo, fontSize = 64.sp))
-                } else T(n.label, 30, C.fg, FontWeight.ExtraBold)
-                Spacer(Modifier.height(6.dp))
-                T(n.desc, 14, C.muted, lineHeight = 20, modifier = Modifier.width(560.dp))
+    Block(st, 1) {
+        Box(Modifier.fillMaxSize()) {
+            when (n.id) {
+                "config" -> Settings(st, locked)
+                "inicio" -> HomePage(st, locked)
+                "pesquisa" -> SearchPage(st, locked)
+                "lista" -> MyListPage(st, locked)
+                "lancamentos" -> ReleasesPage(st, locked)
+                "aovivo" -> TabPage(st, "aovivo", "TV ao vivo", n.desc, locked, hero = false)
+                "musicas" -> TabPage(st, "musicas", "Músicas", "Rádios e canais de música da sua lista. Os apps de música (Spotify, YouTube Music, Deezer…) chegam na entrega 4.", locked, hero = false)
+                "filmes", "series", "novelas", "infantil", "documentarios", "esportes", "noticias" -> TabPage(st, n.id, n.label, n.desc, locked)
+                else -> Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp)) {
+                    T(n.label, 28, C.fg, FontWeight.ExtraBold)
+                    Spacer(Modifier.height(6.dp))
+                    T(n.desc, 13, C.muted, lineHeight = 19, modifier = Modifier.width(560.dp))
+                    Spacer(Modifier.height(20.dp))
+                    InfoCard("Em construção", n.soon, "próxima entrega", locked, wide = true)
+                }
             }
-        }
-        Spacer(Modifier.height(22.dp))
-        if (n.id == "inicio") {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                listOf(
-                    Triple("Notícias", "Leitura resumida de mercado, futebol, tecnologia, investimentos, nacional e internacional.", "entrega 2"),
-                    Triple("Visto", "Filmes, séries, novelas e documentários que você terminou.", "entrega 2"),
-                    Triple("Continuar assistindo", "Onde você pausou e ainda não terminou.", "entrega 2"),
-                ).forEachIndexed { i, (a, b, c) -> Block(st, 2 + i) { InfoCard(a, b, c, locked) } }
-            }
-            Spacer(Modifier.height(16.dp))
-            Block(st, 5) {
-                InfoCard("Nesta versão (${Updater.currentVersion(LocalContext.current)})", "Abertura com buraco negro, big bang e plasma, menu lateral pelo controle e atualização automática pelo GitHub. Para testar a atualização: Configurações › Atualização do app.", "pronto", locked, wide = true)
-            }
-        } else {
-            Block(st, 2) { InfoCard("Em construção", n.soon, "próxima entrega", locked, wide = true) }
         }
     }
 }
@@ -403,8 +430,8 @@ private fun InfoCard(title: String, body: String, tag: String, locked: Boolean, 
 class Cfg(val id: String, val name: String, val soon: Int, val desc: String)
 
 private val CFG = listOf(
-    Cfg("contas", "Contas IPTV", 2, "Até 3 contas com URL do servidor, usuário e senha (padrão Xtream Codes). A senha fica guardada criptografada no aparelho."),
-    Cfg("listas", "Listas e formatos", 2, "M3U, M3U8, JSON, TXT, XMLTV, Xtream, MPD, PLS/XSPF e fluxos diretos, organizados sozinhos nas abas."),
+    Cfg("contas", "Contas IPTV", 1, "Até 3 contas com URL do servidor, usuário e senha (padrão Xtream Codes). A senha fica guardada criptografada no aparelho."),
+    Cfg("listas", "Listas e formatos", 1, ""),
     Cfg("stream", "Transmissão de rede", 3, "Como o \"Abrir fluxo de rede\" do VLC: 5 endereços salvos, com cache de 300, 1.000 ou 3.000 ms."),
     Cfg("web", "Endereços de navegador", 3, "Até 5 sites para abrir direto no navegador da TV."),
     Cfg("proxy", "Proxy", 3, "HTTP, HTTPS ou SOCKS5, com endereço, porta, usuário e senha."),
@@ -414,17 +441,18 @@ private val CFG = listOf(
     Cfg("tema", "Tema do app", 4, "Cosmos, Aurora, Nebulosa e Solar."),
     Cfg("clima", "Clima e cidade", 4, "Cidade e clima no topo da tela, ao lado do relógio."),
     Cfg("som", "Som do aplicativo", 1, ""),
-    Cfg("offline", "Canais fora do ar", 2, "Marca ou esconde os canais sem sinal."),
+    Cfg("offline", "Canais fora do ar", 3, "Marca ou esconde os canais sem sinal."),
     Cfg("rede", "Rede e internet", 3, "Situação da conexão e teste de velocidade."),
     Cfg("controle", "Mapear controle remoto", 4, "Escolha a tecla do controle para OK, Voltar, Play/Pausa e Favoritar."),
-    Cfg("adulto", "Conteúdo adulto", 2, "Bloqueio com PIN."),
+    Cfg("adulto", "Conteúdo adulto", 1, "Bloqueio com PIN."),
     Cfg("update", "Atualização do app", 1, ""),
     Cfg("sobre", "Sobre o aparelho", 1, ""),
 )
 
 @Composable
 private fun Settings(st: AppState, locked: Boolean) {
-    var sel by remember { mutableStateOf("update") }
+    var sel by remember { mutableStateOf(st.cfgSel) }
+    LaunchedEffect(sel) { st.cfgSel = sel }
     Column(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp)) {
         Block(st, 1) { T("Configurações", 30, C.fg, FontWeight.ExtraBold) }
         Spacer(Modifier.height(14.dp))
@@ -436,8 +464,8 @@ private fun Settings(st: AppState, locked: Boolean) {
             }
             Block(st, 3) {
                 Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(16.dp))
-                        .padding(20.dp).focusGroup(),
+                    Modifier.fillMaxWidth().fillMaxHeight().padding(bottom = 18.dp).clip(RoundedCornerShape(16.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(16.dp))
+                        .verticalScroll(rememberScrollState()).padding(20.dp).focusGroup(),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) { CfgPanel(st, CFG.first { it.id == sel }, locked) }
             }
@@ -463,7 +491,7 @@ private fun CfgItem(c: Cfg, cur: Boolean, locked: Boolean, onSel: () -> Unit) {
 }
 
 @Composable
-private fun Btn(label: String, on: Boolean = false, locked: Boolean, primary: Boolean = false, onClick: () -> Unit) {
+fun Btn(label: String, on: Boolean = false, locked: Boolean, primary: Boolean = false, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     Box(
         Modifier.graphicsLayer { scaleX = if (f) 1.06f else 1f; scaleY = scaleX }
@@ -478,7 +506,7 @@ private fun Btn(label: String, on: Boolean = false, locked: Boolean, primary: Bo
 }
 
 @Composable
-private fun Seg(label: String, opts: List<Pair<Int, String>>, cur: Int, locked: Boolean, onPick: (Int) -> Unit) {
+fun Seg(label: String, opts: List<Pair<Int, String>>, cur: Int, locked: Boolean, onPick: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         T(label.uppercase(), 11, C.muted, FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { opts.forEach { (v, t) -> Btn(t, cur == v, locked) { onPick(v) } } }
@@ -486,7 +514,7 @@ private fun Seg(label: String, opts: List<Pair<Int, String>>, cur: Int, locked: 
 }
 
 @Composable
-private fun KV(rows: List<Pair<String, String>>) {
+fun KV(rows: List<Pair<String, String>>) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.bg).padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         rows.forEach { (k, v) ->
             Row { T(k, 13, C.muted, modifier = Modifier.width(150.dp)); T(v, 13, C.fg, FontWeight.SemiBold) }
@@ -509,6 +537,9 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
             Seg("Abertura animada", listOf(1 to "Ligada", 0 to "Desligada"), if (intro) 1 else 0, locked) { intro = it == 1; st.prefs.intro = intro }
         }
         "update" -> UpdatePanel(st, locked)
+        "contas" -> AccountsPanel(st, locked)
+        "listas" -> ListsPanel(st, locked)
+        "adulto" -> AdultPanel(st, locked)
         "sobre" -> KV(deviceInfo(ctx))
         else -> {
             T(c.desc, 13, C.muted, lineHeight = 19)
