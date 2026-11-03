@@ -26,7 +26,11 @@ object PhoneServer {
             .flatMap { it.inetAddresses.toList() }.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }?.hostAddress
     } catch (e: Exception) { null }
 
+    private var users = 0
+
+    /** Cada tela que mostra o endereço liga o servidor; ele só desliga quando a última sai. */
     fun start() {
+        users++
         if (server != null) return
         val s = try {
             ServerSocket().apply { reuseAddress = true; bind(java.net.InetSocketAddress(PORT)) }
@@ -41,7 +45,11 @@ object PhoneServer {
         }
     }
 
-    fun stop() { try { server?.close() } catch (e: Exception) {}; server = null }
+    fun stop() {
+        users = (users - 1).coerceAtLeast(0)
+        if (users > 0) return
+        try { server?.close() } catch (e: Exception) {}; server = null
+    }
 
     private fun handle(c: Socket) {
         c.soTimeout = 15000

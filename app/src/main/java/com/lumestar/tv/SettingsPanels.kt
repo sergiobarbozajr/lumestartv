@@ -133,7 +133,7 @@ fun PhoneBox(st: AppState) {
     val ctx = LocalContext.current
     val ip = remember { PhoneServer.address() }
     DisposableEffect(Unit) {
-        PhoneServer.onReceive = { f ->
+        val mine: (Map<String, String>) -> Unit = { f ->
             if (f["tipo"] == "lista") {
                 Store.lists.add(ListSrc(f["nome"].orEmpty().ifBlank { "Lista ${Store.lists.size + 1}" }, f["url"].orEmpty())); Store.saveLists()
                 st.say("Lista recebida do celular. Carregando…")
@@ -154,8 +154,9 @@ fun PhoneBox(st: AppState) {
                 }
             }
         }
+        PhoneServer.onReceive = mine
         PhoneServer.start()
-        onDispose { PhoneServer.stop(); PhoneServer.onReceive = null }
+        onDispose { PhoneServer.stop(); if (PhoneServer.onReceive === mine) PhoneServer.onReceive = null }
     }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.a2.copy(alpha = .12f)).border(1.dp, C.a2.copy(alpha = .4f), RoundedCornerShape(12.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         T("ENVIAR PELO CELULAR", 10, C.a2, FontWeight.Bold)
