@@ -449,6 +449,13 @@ private fun InfoCard(title: String, body: String, tag: String, locked: Boolean, 
 // ---------------- configurações ----------------
 class Cfg(val id: String, val name: String, val soon: Int, val desc: String)
 
+/** Para o celular: lista de configurações prontas e abrir uma pelo id. */
+fun cfgList(): List<Pair<String, String>> = CFG.filter { it.soon <= 1 }.map { it.id to it.name }
+fun cfgName(id: String): String? = CFG.firstOrNull { it.id == id }?.name
+
+@Composable
+fun CfgPanelById(st: AppState, id: String) { CFG.firstOrNull { it.id == id }?.let { CfgPanel(st, it, false) } }
+
 private val CFG = listOf(
     Cfg("contas", "Contas IPTV", 1, "Até 3 contas com URL do servidor, usuário e senha (padrão Xtream Codes). A senha fica guardada criptografada no aparelho."),
     Cfg("listas", "Listas e formatos", 1, ""),

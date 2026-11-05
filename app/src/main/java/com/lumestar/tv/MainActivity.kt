@@ -13,7 +13,16 @@ class MainActivity : ComponentActivity() {
         CrashLog.init(applicationContext)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        // atalho de teste: --es modo tv | celular
+        phone = when (intent?.getStringExtra("modo")) { "tv" -> false; "celular" -> true; else -> isPhone(this) }
+        if (phone) {
+            // celular: em pé, com as barras do sistema; o conteúdo desenha por baixo delas (padding nas telas)
+            requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        } else {
+            requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        }
         val prefs = Prefs(this)
         Store.init(this)
         PP.init(this)
@@ -33,10 +42,11 @@ class MainActivity : ComponentActivity() {
         createdAt = android.os.SystemClock.uptimeMillis()
         // atalhos para teste (adb): --ez sem_abertura true --es pagina config --es abrir <endereço>
         val args = LaunchArgs(intent?.getBooleanExtra("sem_abertura", false) ?: false, intent?.getStringExtra("pagina"), intent?.getStringExtra("abrir"))
-        setContent { LumeApp(prefs, args) { finish() } }
+        setContent { if (phone) MobileApp(prefs, args) { finish() } else LumeApp(prefs, args) { finish() } }
     }
 
     private var createdAt = 0L
+    private var phone = false
     private val pressed = HashSet<Int>()
     private val swallow = HashSet<Int>()
 

@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -208,7 +209,7 @@ fun quickSpeed(done: (Double?, String) -> Unit) {
 private fun speedVerdict(m: Double) = when { m >= 25 -> "ótima, dá para 4K"; m >= 10 -> "boa, dá para Full HD"; m >= 5 -> "razoável, dá para HD (720p)"; else -> "fraca para vídeo" }
 
 @Composable
-fun AssistantPage(st: AppState, locked: Boolean) {
+fun AssistantPage(st: AppState, locked: Boolean, compact: Boolean = false) {
     val ctx = LocalContext.current
     val msgs = remember { mutableStateListOf(Msg(false, "Olá! Sou o assistente do LumeStarTV. Funciono aqui na TV, sem internet de terceiros. Escolha uma pergunta à esquerda que eu verifico o aparelho e respondo.")) }
     val list = rememberLazyListState()
@@ -267,6 +268,28 @@ fun AssistantPage(st: AppState, locked: Boolean) {
         },
     )
 
+    val chat: @Composable (Modifier) -> Unit = { mod ->
+        LazyColumn(
+            mod.clip(RoundedCornerShape(16.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(16.dp)),
+            state = list, contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(msgs) { m ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = if (m.me) Arrangement.End else Arrangement.Start) {
+                    Column(Modifier.fillMaxWidth(if (m.me) .8f else .95f).clip(RoundedCornerShape(14.dp)).background(if (m.me) C.a1.copy(alpha = .25f) else C.panel2).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        T(m.text, 13, C.fg, if (m.me) FontWeight.SemiBold else FontWeight.Medium, lineHeight = 19)
+                        m.actions.forEach { (l, a) -> Btn(l, locked = locked, primary = true) { a() } }
+                    }
+                }
+            }
+        }
+    }
+    if (compact) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { quick.forEach { (q, run) -> Btn(q, locked = locked) { run() } } }
+            chat(Modifier.weight(1f).fillMaxWidth())
+        }
+        return
+    }
     Row(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(Modifier.width(280.dp).verticalScroll(rememberScrollState()).focusGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             T("Assistente", 30, C.fg, FontWeight.ExtraBold)

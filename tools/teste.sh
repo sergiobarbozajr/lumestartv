@@ -10,7 +10,7 @@ key() { adb shell input keyevent "$1"; sleep "${2:-0.6}"; }
 
 adb install -r LumeStarTV.apk > teste/instalar.txt 2>&1 || { echo "nao instalou" > teste/falhou.txt; exit 0; }
 adb logcat -c
-adb shell am start -n $PKG/.MainActivity > /dev/null
+adb shell am start -n $PKG/.MainActivity --es modo tv > /dev/null
 START=$(date +%s%N)
 for i in $(seq -w 1 14); do
   sleep 0.9
@@ -20,7 +20,9 @@ done
 sleep 5
 shot "inicio_vazio"
 adb shell dumpsys gfxinfo $PKG reset > /dev/null 2>&1 || true
-abre() { adb shell am force-stop $PKG; adb shell am start -n $PKG/.MainActivity --ez sem_abertura true "$@" > /dev/null; sleep 6; }
+abre() { adb shell am force-stop $PKG; adb shell am start -n $PKG/.MainActivity --ez sem_abertura true --es modo tv "$@" > /dev/null; sleep 6; }
+cel() { adb shell am force-stop $PKG; adb shell am start -n $PKG/.MainActivity --ez sem_abertura true --es modo celular "$@" > /dev/null; sleep 7; }
+toque() { adb shell input tap "$1" "$2"; sleep "${3:-1.2}"; }
 
 # "Enviar pelo celular": abre Configurações › Contas IPTV (liga a página na rede) e envia a lista de teste
 abre --es pagina config
@@ -125,6 +127,26 @@ if grep -q "ANR in\|FATAL" teste/grande_problemas.txt; then echo "lista grande: 
 adb shell pidof $PKG > /dev/null || echo "lista grande: o app fechou" >> teste/falhou.txt
 
 adb shell dumpsys gfxinfo $PKG > teste/gfx_total.txt 2>&1 || true
+# ---- versão de celular (toque) ----
+adb shell settings put system accelerometer_rotation 0
+cel
+shot "celular_inicio"
+cel --es pagina aovivo
+shot "celular_aovivo"
+cel --es pagina series
+shot "celular_series"
+read W H <<< $(adb shell wm size | grep -oE "[0-9]+x[0-9]+" | tail -1 | tr x ' ')
+toque $((W/6)) $((H*35/100)) 2
+shot "celular_detalhe"
+cel --es pagina mais
+shot "celular_mais"
+cel --es pagina cfg:listas
+shot "celular_config_listas"
+cel --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
+sleep 3
+shot "celular_video"
+adb shell am force-stop $PKG
+
 adb logcat -d > teste/logcat.txt 2>&1 || true
 
 {

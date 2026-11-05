@@ -53,6 +53,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -240,7 +242,7 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(st: AppState, req: PlayReq) {
+fun PlayerScreen(st: AppState, req: PlayReq, touch: Boolean = false) {
     val ctx = LocalContext.current
     val eng = remember { Engine(ctx, if (req.cacheMs > 0) req.cacheMs else PP.cacheMs) }
     val player = eng.player
@@ -443,6 +445,7 @@ fun PlayerScreen(st: AppState, req: PlayReq) {
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
+            .then(if (touch) touchGestures(ctx, playerToggle = { if (player.isPlaying) player.pause() else player.play(); showControls() }, tap = { if (showUi) showUi = false else showControls() }, seek = { d -> seek(d) }, fill = { on -> PP.fit = if (on) 1 else 0; layoutVideo(); say(if (on) "⛶ Preencher a tela" else "▭ Original") }, say = { m -> say(m) }) else Modifier)
             .focusRequester(rootFocus).focusable()
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -671,4 +674,59 @@ fun Stepper(label: String, value: Int, unit: String, locked: Boolean = false, on
             Btn("+", locked = locked) { onStep(1) }
         }
     }
+}
+
+
+/**
+ * Gestos do celular no vídeo: toque mostra/esconde os botões; toque duplo nas laterais volta/avança 10 s (no meio pausa);
+ * arrastar para cima/baixo à esquerda muda o brilho e à direita o volume; pinça com dois dedos preenche a tela.
+ */
+private fun touchGestures(ctx: android.content.Context, playerToggle: () -> Unit, tap: () -> Unit, seek: (Long) -> Unit, fill: (Boolean) -> Unit, say: (String) -> Unit): Modifier {
+    val act = ctx as? android.app.Activity
+    val am = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+    return Modifier
+        .pointerInput(Unit) {
+            androidx.compose.foundation.gestures.detectTapGestures(
+                onTap = { tap() },
+                onDoubleTap = { o -> val w = size.width; when { o.x < w * .38f -> seek(-10_000); o.x > w * .62f -> seek(10_000); else -> playerToggle() } })
+        }
+        .pointerInput(Unit) {
+            var left = true; var acc = 0f
+            androidx.compose.foundation.gestures.detectVerticalDragGestures(
+                onDragStart = { o -> left = o.x < size.width / 2f; acc = 0f },
+                onVerticalDrag = { ch, dy ->
+                    ch.consume(); acc -= dy
+                    val step = size.height / 16f
+                    if (kotlin.math.abs(acc) < step) return@detectVerticalDragGestures
+                    val n = (acc / step).toInt(); acc -= n * step
+                    if (left && act != null) {
+                        val lp = act.window.attributes
+                        val cur = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
+                        lp.screenBrightness = (cur + n * 0.0625f).coerceIn(0.05f, 1f); act.window.attributes = lp
+                        say("☀ Brilho ${(lp.screenBrightness * 100).toInt()}%")
+                    } else {
+                        val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                        val v = (am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) + n).coerceIn(0, max)
+                        am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0)
+                        say("🔊 Volume ${v * 100 / maxOf(1, max)}%")
+                    }
+                })
+        }
+        .pointerInput(Unit) {
+            androidx.compose.foundation.gestures.awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                var d0 = 0f
+                while (true) {
+                    val ev = awaitPointerEvent()
+                    val ps = ev.changes.filter { it.pressed }
+                    if (ps.isEmpty()) break
+                    if (ps.size >= 2) {
+                        val d = (ps[0].position - ps[1].position).getDistance()
+                        if (d0 == 0f) d0 = d
+                        else if (d / d0 > 1.25f) { fill(true); d0 = d; ev.changes.forEach { it.consume() } }
+                        else if (d / d0 < 0.8f) { fill(false); d0 = d; ev.changes.forEach { it.consume() } }
+                    }
+                }
+            }
+        }
 }
