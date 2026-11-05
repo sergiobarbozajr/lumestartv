@@ -145,7 +145,6 @@ shot "celular_config_listas"
 cel --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
 sleep 3
 shot "celular_video"
-adb shell am force-stop $PKG
 
 adb logcat -d > teste/logcat.txt 2>&1 || true
 
