@@ -123,7 +123,7 @@ private fun MobileShell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     }
 
     val p = st.player
-    if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { PlayerScreen(st, p, touch = true) } }; MToast(st); return }
+    if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { PlayerScreen(st, p, touchMode = true) } }; MToast(st); return }
 
     Column(Modifier.fillMaxSize().background(C.bg).statusBarsPadding().navigationBarsPadding()) {
         MTop(st) { stack.add("pesquisa") }

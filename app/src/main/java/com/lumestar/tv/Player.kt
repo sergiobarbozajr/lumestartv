@@ -55,6 +55,9 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -242,7 +245,7 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(st: AppState, req: PlayReq, touch: Boolean = false) {
+fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     val ctx = LocalContext.current
     val eng = remember { Engine(ctx, if (req.cacheMs > 0) req.cacheMs else PP.cacheMs) }
     val player = eng.player
@@ -445,7 +448,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touch: Boolean = false) {
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
-            .then(if (touch) touchGestures(ctx, playerToggle = { if (player.isPlaying) player.pause() else player.play(); showControls() }, tap = { if (showUi) showUi = false else showControls() }, seek = { d -> seek(d) }, fill = { on -> PP.fit = if (on) 1 else 0; layoutVideo(); say(if (on) "⛶ Preencher a tela" else "▭ Original") }, say = { m -> say(m) }) else Modifier)
+            .then(if (touchMode) touchGestures(ctx, playerToggle = { if (player.isPlaying) player.pause() else player.play(); showControls() }, tap = { if (showUi) showUi = false else showControls() }, seek = { d -> seek(d) }, fill = { on -> PP.fit = if (on) 1 else 0; layoutVideo(); say(if (on) "⛶ Preencher a tela" else "▭ Original") }, say = { m -> say(m) }) else Modifier)
             .focusRequester(rootFocus).focusable()
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -686,13 +689,13 @@ private fun touchGestures(ctx: android.content.Context, playerToggle: () -> Unit
     val am = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
     return Modifier
         .pointerInput(Unit) {
-            androidx.compose.foundation.gestures.detectTapGestures(
+            detectTapGestures(
                 onTap = { tap() },
                 onDoubleTap = { o -> val w = size.width; when { o.x < w * .38f -> seek(-10_000); o.x > w * .62f -> seek(10_000); else -> playerToggle() } })
         }
         .pointerInput(Unit) {
             var left = true; var acc = 0f
-            androidx.compose.foundation.gestures.detectVerticalDragGestures(
+            detectVerticalDragGestures(
                 onDragStart = { o -> left = o.x < size.width / 2f; acc = 0f },
                 onVerticalDrag = { ch, dy ->
                     ch.consume(); acc -= dy
@@ -713,7 +716,7 @@ private fun touchGestures(ctx: android.content.Context, playerToggle: () -> Unit
                 })
         }
         .pointerInput(Unit) {
-            androidx.compose.foundation.gestures.awaitEachGesture {
+            awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
                 var d0 = 0f
                 while (true) {
