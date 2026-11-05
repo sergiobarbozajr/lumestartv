@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -282,7 +283,7 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
         st.newsOpen?.let { NewsDialog(st, it) }
         st.detail?.let { DetailDialog(st, it) }
         st.kb?.let { Keyboard(st, it) }
-        st.player?.let { PlayerScreen(st, it) }
+        st.player?.let { key(it.id, it.url) { PlayerScreen(st, it) } }
         if (st.exitAsk) ExitDialog(st, finish)
         Toast(st)
     }

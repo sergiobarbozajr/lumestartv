@@ -47,6 +47,8 @@ shot "aovivo_foco"
 key KEYCODE_DPAD_CENTER 1
 sleep 14
 shot "reproduzindo_canal"
+sleep 6; key KEYCODE_DPAD_UP 3
+shot "canal_seguinte_tv"
 key KEYCODE_BACK 2
 abre --es pagina series
 key KEYCODE_DPAD_RIGHT 1.2
@@ -133,6 +135,10 @@ cel
 shot "celular_inicio"
 cel --es pagina aovivo
 shot "celular_aovivo"
+toque 300 500 4
+read W2 H2 <<< $(adb shell wm size | grep -oE "[0-9]+x[0-9]+" | tail -1 | tr x ' ')
+toque $((H2*9/10)) $((W2/2)) 3
+shot "canal_seguinte_celular"
 cel --es pagina series
 shot "celular_series"
 read W H <<< $(adb shell wm size | grep -oE "[0-9]+x[0-9]+" | tail -1 | tr x ' ')

@@ -443,18 +443,41 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         }
     }
 
+    // canais vizinhos para trocar sem sair do vídeo: mesma categoria; se ela tiver só um, todos os ao vivo
+    val chans = remember(req.id) {
+        if (!req.live) emptyList() else {
+            val all = Catalog.items.filter { it.kind == LIVE && Catalog.visible(it) && !(PP.offlineMode == "ocultar" && it.id in PP.offline) }
+            val g = all.filter { it.group == req.group }
+            if (g.size > 1) g else all
+        }
+    }
+    val chanIdx = remember(req.id) { chans.indexOfFirst { it.id == req.id } }
+    fun zap(d: Int) {
+        if (!req.live || chans.size < 2) return
+        val n = chans[((if (chanIdx < 0) 0 else chanIdx) + d + chans.size) % chans.size]
+        st.play(PlayReq(n.id, n.title, n.url, true, 0L, n.group, n.ext))
+    }
+
     fun seek(d: Long) { if (!req.live) { player.seekTo((player.currentPosition + d).coerceAtLeast(0)); say((if (d > 0) "⏩ " else "⏪ ") + fmt(player.currentPosition)) } }
     fun showControls() { showUi = true; touch++ }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
-            .then(if (touchMode) touchGestures(ctx, playerToggle = { if (player.isPlaying) player.pause() else player.play(); showControls() }, tap = { if (showUi) showUi = false else showControls() }, seek = { d -> seek(d) }, fill = { on -> PP.fit = if (on) 1 else 0; layoutVideo(); say(if (on) "⛶ Preencher a tela" else "▭ Original") }, say = { m -> say(m) }) else Modifier)
+            .then(if (touchMode) touchGestures(ctx, live = req.live && chans.size > 1, zap = { d -> zap(d) }, playerToggle = { if (player.isPlaying) player.pause() else player.play(); showControls() }, tap = { if (showUi) showUi = false else showControls() }, seek = { d -> seek(d) }, fill = { on -> PP.fit = if (on) 1 else 0; layoutVideo(); say(if (on) "⛶ Preencher a tela" else "▭ Original") }, say = { m -> say(m) }) else Modifier)
             .focusRequester(rootFocus).focusable()
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 touch++
+                val kc = ev.key.nativeKeyCode
+                if (kc == AKey.KEYCODE_CHANNEL_UP || kc == AKey.KEYCODE_PAGE_UP) { zap(1); return@onKeyEvent true }
+                if (kc == AKey.KEYCODE_CHANNEL_DOWN || kc == AKey.KEYCODE_PAGE_DOWN) { zap(-1); return@onKeyEvent true }
                 if (showUi) return@onKeyEvent false
-                when (ev.key.nativeKeyCode) {
+                // ao vivo: ▲ ▶ próximo canal, ▼ ◀ canal anterior
+                if (req.live && chans.size > 1) when (kc) {
+                    AKey.KEYCODE_DPAD_UP, AKey.KEYCODE_DPAD_RIGHT -> { zap(1); return@onKeyEvent true }
+                    AKey.KEYCODE_DPAD_DOWN, AKey.KEYCODE_DPAD_LEFT -> { zap(-1); return@onKeyEvent true }
+                }
+                when (kc) {
                     AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER, AKey.KEYCODE_NUMPAD_ENTER, AKey.KEYCODE_MEDIA_PLAY_PAUSE -> { if (player.isPlaying) player.pause() else player.play(); showControls(); wantPlay++; true }
                     AKey.KEYCODE_DPAD_LEFT, AKey.KEYCODE_MEDIA_REWIND -> { seek(-10_000); true }
                     AKey.KEYCODE_DPAD_RIGHT, AKey.KEYCODE_MEDIA_FAST_FORWARD -> { seek(10_000); true }
@@ -494,7 +517,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         if (showUi || !playing) {
             Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent))).padding(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 36.dp), verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
-                    T((if (req.live) "AO VIVO · " else "") + req.group.uppercase(), 10, if (req.live) C.bad else C.a1, FontWeight.Bold, maxLines = 1)
+                    T((if (req.live) "AO VIVO · " else "") + req.group.uppercase() + (if (req.live && chanIdx >= 0 && chans.size > 1) "  ·  CANAL ${chanIdx + 1} DE ${chans.size}" else ""), 10, if (req.live) C.bad else C.a1, FontWeight.Bold, maxLines = 1)
                     T(req.title, 21, C.fg, FontWeight.ExtraBold, maxLines = 1)
                 }
                 val v = vsize
@@ -529,8 +552,10 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (!req.live) Btn("⟲10", locked = false) { seek(-10_000) }
+                    if (req.live && chans.size > 1) Btn("◀ Canal", locked = false) { zap(-1) }
                     Box(Modifier.focusRequester(playFocus)) { Btn(if (playing) "❚❚" else "▶", locked = false, primary = true) { if (player.isPlaying) player.pause() else player.play(); touch++ } }
                     if (!req.live) Btn("10⟳", locked = false) { seek(10_000) }
+                    if (req.live && chans.size > 1) Btn("Canal ▶", locked = false) { zap(1) }
                     Btn("−", locked = false) { vol = (vol - .1f).coerceAtLeast(0f); player.volume = vol; say("Volume ${(vol * 100).toInt()}") }
                     Box(Modifier.width(44.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x33FFFFFF))) { Box(Modifier.fillMaxWidth(vol).fillMaxHeight().background(Color.White)) }
                     Btn("+", locked = false) { vol = (vol + .1f).coerceAtMost(1f); player.volume = vol; say("Volume ${(vol * 100).toInt()}") }
@@ -684,13 +709,14 @@ fun Stepper(label: String, value: Int, unit: String, locked: Boolean = false, on
  * Gestos do celular no vídeo: toque mostra/esconde os botões; toque duplo nas laterais volta/avança 10 s (no meio pausa);
  * arrastar para cima/baixo à esquerda muda o brilho e à direita o volume; pinça com dois dedos preenche a tela.
  */
-private fun touchGestures(ctx: android.content.Context, playerToggle: () -> Unit, tap: () -> Unit, seek: (Long) -> Unit, fill: (Boolean) -> Unit, say: (String) -> Unit): Modifier {
+private fun touchGestures(ctx: android.content.Context, live: Boolean, zap: (Int) -> Unit, playerToggle: () -> Unit, tap: () -> Unit, seek: (Long) -> Unit, fill: (Boolean) -> Unit, say: (String) -> Unit): Modifier {
     val act = ctx as? android.app.Activity
     val am = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
     return Modifier
         .pointerInput(Unit) {
             detectTapGestures(
-                onTap = { tap() },
+                // ao vivo: toque à direita próximo canal, à esquerda anterior, no meio mostra os botões
+                onTap = { o -> val w = size.width; if (live && o.x > w * .7f) zap(1) else if (live && o.x < w * .3f) zap(-1) else tap() },
                 onDoubleTap = { o -> val w = size.width; when { o.x < w * .38f -> seek(-10_000); o.x > w * .62f -> seek(10_000); else -> playerToggle() } })
         }
         .pointerInput(Unit) {

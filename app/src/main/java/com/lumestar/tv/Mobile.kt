@@ -44,6 +44,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -123,7 +124,7 @@ private fun MobileShell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     }
 
     val p = st.player
-    if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { PlayerScreen(st, p, touchMode = true) } }; MToast(st); return }
+    if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { key(p.id, p.url) { PlayerScreen(st, p, touchMode = true) } } }; MToast(st); return }
 
     Column(Modifier.fillMaxSize().background(C.bg).statusBarsPadding().navigationBarsPadding()) {
         MTop(st) { stack.add("pesquisa") }
