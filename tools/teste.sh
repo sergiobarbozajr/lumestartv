@@ -38,8 +38,22 @@ for t in 1 2 3; do
 done
 grep -q "Enviado" teste/celular_resposta.html && echo "celular: enviado" >> teste/resumo_extra.txt || echo "celular: FALHOU" >> teste/resumo_extra.txt
 # imagem do tema Anime enviada pelo "celular" (formulário com arquivo)
-convert -size 1280x720 gradient:"#1a3a8a"-"#e8702a" -fill "#7fd6ff" -draw "circle 420,330 520,330" teste/tema.jpg 2>/dev/null || python3 -c "open('teste/tema.jpg','wb').write(b'')"
-curl -s -m 30 -F "imagem=@teste/tema.jpg;type=image/jpeg" http://127.0.0.1:8765/ > teste/tema_resposta.html
+python3 - <<'PY'
+import zlib, struct
+W, H = 640, 360
+rows = bytearray()
+for y in range(H):
+    rows.append(0)
+    for x in range(W):
+        t = x / W
+        r, g, b = int(26 + (232 - 26) * t), int(58 + (112 - 58) * t), int(138 + (42 - 138) * t)
+        if (x - 210) ** 2 + (y - 165) ** 2 < 60 ** 2: r, g, b = 127, 214, 255
+        rows += bytes((r, g, b))
+def chunk(k, d): return struct.pack('>I', len(d)) + k + d + struct.pack('>I', zlib.crc32(k + d) & 0xffffffff)
+png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', W, H, 8, 2, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(bytes(rows), 6)) + chunk(b'IEND', b'')
+open('teste/tema.png', 'wb').write(png)
+PY
+curl -s -m 30 -F "imagem=@teste/tema.png;type=image/png" http://127.0.0.1:8765/ > teste/tema_resposta.html
 grep -q "Imagem recebida" teste/tema_resposta.html && echo "tema anime: recebido" >> teste/resumo_extra.txt || echo "tema anime: FALHOU" >> teste/resumo_extra.txt
 sleep 2; shot "tema_anime"
 sleep 20
