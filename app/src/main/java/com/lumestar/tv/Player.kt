@@ -490,7 +490,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                     else -> false
                 }
             }
-    ) {
+    ) { Compact {
         AndroidView(factory = { c ->
             FrameLayout(c).apply {
                 setBackgroundColor(android.graphics.Color.BLACK)
@@ -575,7 +575,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         }
         panel?.let { p ->
             Column(
-                Modifier.align(Alignment.CenterEnd).padding(end = 22.dp, bottom = 70.dp).width(380.dp).height(360.dp)
+                Modifier.align(Alignment.CenterEnd).padding(end = 18.dp, bottom = 60.dp).width(320.dp).height(330.dp)
                     .clip(RoundedCornerShape(16.dp)).background(Color(0xF50A0E28)).border(1.dp, C.line, RoundedCornerShape(16.dp))
                     .verticalScroll(rememberScrollState()).padding(16.dp).focusGroup(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -683,7 +683,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 }
             }
         }
-    }
+    } }
 }
 
 /** Grupo de opções em botões (uma escolhida). */

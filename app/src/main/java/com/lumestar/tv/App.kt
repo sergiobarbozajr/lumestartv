@@ -523,6 +523,15 @@ private fun CfgItem(c: Cfg, cur: Boolean, locked: Boolean, onSel: () -> Unit) {
     }
 }
 
+/** Botões mais compactos (usado no reprodutor). */
+val LocalCompact = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+@Composable
+fun Compact(scale: Float = 0.8f, content: @Composable () -> Unit) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(LocalCompact provides true, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * scale)) { content() }
+}
+
 @Composable
 fun Btn(label: String, on: Boolean = false, locked: Boolean, primary: Boolean = false, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
@@ -534,7 +543,7 @@ fun Btn(label: String, on: Boolean = false, locked: Boolean, primary: Boolean = 
             .focusProperties { canFocus = !locked }
             .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); f = n }
             .clickable(remember { MutableInteractionSource() }, null) { Sfx.ok(); onClick() }
-            .padding(horizontal = 14.dp, vertical = 9.dp)
+            .padding(horizontal = if (LocalCompact.current) 10.dp else 14.dp, vertical = if (LocalCompact.current) 6.dp else 9.dp)
     ) { T((if (on) "● " else "") + label, 13, if (f) Color(0xFF050816) else C.fg, FontWeight.SemiBold, maxLines = 1) }
 }
 
