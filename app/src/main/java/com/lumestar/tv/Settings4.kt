@@ -61,7 +61,7 @@ fun AiImagePanel(st: AppState, locked: Boolean) {
     T("Melhora a imagem durante o vídeo: realça contraste e cor de forma leve, e o modo de imagem ajusta brilho, contraste e saturação. Roda na placa de vídeo da TV, sem pesar.", 13, C.muted, lineHeight = 19)
     Opts("IA de imagem", AI_UP, PP.aiUp, locked) { PP.aiUp = it }
     val r = GpuProbe.result
-    val tierName = listOf("Modo leve", "Alta 1080p", "Ultra 1440p")
+    val tierName = listOf("Modo leve", "FHD", "QHD")
     KV(listOf(
         "Diagnóstico" to if (GpuProbe.running) "testando…" else if (r == null) "ainda não feito" else "feito",
         "Placa de vídeo" to (r?.gpu?.take(34) ?: "—"),

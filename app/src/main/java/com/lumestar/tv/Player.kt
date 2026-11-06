@@ -108,7 +108,7 @@ private val EQ_V = mapOf("padrao" to intArrayOf(0, 0, 0), "voz" to intArrayOf(-3
 val FITS = listOf("Original", "Preencher (sem faixas)", "Zoom 120%")
 val SHARP = linkedMapOf("suave" to "Suave", "media" to "Média", "forte" to "Forte", "max" to "Máxima")
 val PANELS = linkedMapOf("auto" to "Automático", "hva" to "HVA / VA (TCL)", "outro" to "IPS / OLED / outro")
-val AI_UP = linkedMapOf("auto" to "Automática (IA decide)", "1440" to "Ultra 1440p", "1080" to "Alta 1080p", "off" to "Desligada")
+val AI_UP = linkedMapOf("auto" to "Auto (IA)", "1440" to "QHD", "1080" to "FHD", "off" to "Desligada")
 val QUALITY = linkedMapOf("auto" to "Automática", "480" to "480p", "720" to "720p", "1080" to "1080p", "2160" to "2160p")
 
 /** Filtro de cor do vídeo: modo de imagem + brilho, contraste e cor + realce. */

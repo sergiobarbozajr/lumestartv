@@ -75,8 +75,8 @@ object ImageAi {
         val src = "${h}p"
         val chipTv = if (hwAi) " + IA da TV" else ""
         val p = when {
-            tier >= 2 && h < 1400 -> Plan("u1440$tag", fx(1440, true, 0.45f), "IA $src→1440p$chipTv", 2, 1440)
-            tier >= 1 && h < 900 && w < 1600 -> Plan("u1080$tag", fx(1080, false, 0.5f), "IA $src→1080p$chipTv", 1, 1080)
+            tier >= 2 && h < 1400 -> Plan("u1440$tag", fx(1440, true, 0.45f), "IA $src→QHD$chipTv", 2, 1440)
+            tier >= 1 && h < 900 && w < 1600 -> Plan("u1080$tag", fx(1080, false, 0.5f), "IA $src→FHD$chipTv", 1, 1080)
             tier >= 1 && h <= 1100 -> Plan("sharp$tag", fx(0, true, 0.4f), "IA · nitidez $src$chipTv", 1, h)
             (GpuProbe.result?.msLite ?: 99f) < 14f -> Plan("lite$tag", fx(0, true, 0.35f), "IA leve · nitidez $src$chipTv", 0, h)
             hwAi -> Plan("pass", emptyList(), "IA da TV · 4K", 0, h)
