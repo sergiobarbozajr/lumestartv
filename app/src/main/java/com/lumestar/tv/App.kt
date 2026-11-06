@@ -323,7 +323,7 @@ private fun Sidebar(st: AppState, locked: Boolean) {
     val center = with(d) { Offset(480.dp.toPx(), 270.dp.toPx()) }
     Column(
         Modifier.fillMaxHeight().width(w)
-            .drawBehind { drawRect(Brush.horizontalGradient(if (st.navHasFocus) listOf(C.bg.copy(alpha = .82f), C.bg.copy(alpha = .62f)) else listOf(C.bg.copy(alpha = .55f), C.bg.copy(alpha = .30f))), alpha = Opening.block(st.openT, 0)) }
+            .drawBehind { drawRect(Brush.horizontalGradient(if (st.navHasFocus) listOf(C.bg.copy(alpha = .96f), C.bg.copy(alpha = .90f)) else listOf(C.bg.copy(alpha = .55f), C.bg.copy(alpha = .30f))), alpha = Opening.block(st.openT, 0)) }
             .onFocusChanged { st.navHasFocus = it.hasFocus }
             // ao voltar do conteúdo para o menu, o foco vai para a aba aberta (não para a opção mais próxima)
             .focusProperties { enter = { st.navReq[st.page] ?: FocusRequester.Default } }
