@@ -11,8 +11,8 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 26
-        versionName = "0.6.3"
+        versionCode = 27
+        versionName = "0.6.4"
         // chave padrão do TMDB: vem do segredo TMDB_KEY do GitHub na hora de compilar (nunca fica no código)
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() } + "\"")
         buildConfigField("String", "TMDB_KEY2", "\"" + (System.getenv("TMDB_KEY_2") ?: "").filter { it.isLetterOrDigit() } + "\"")
@@ -59,7 +59,7 @@ android {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
+    val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
     implementation(composeBom)
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.1")
