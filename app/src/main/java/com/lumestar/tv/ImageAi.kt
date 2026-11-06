@@ -61,13 +61,14 @@ object ImageAi {
      * mode: "auto" (a IA decide), "1440", "1080" ou "off". cap: limite do disjuntor neste vídeo.
      * compare: tela dividida (esquerda original, direita com IA).
      */
-    fun plan(mode: String, f: Format?, cap: Int, compare: Boolean): Plan {
+    fun plan(mode: String, f: Format?, cap: Int, compare: Boolean, live: Boolean = false): Plan {
         val (sh, dt) = level(); val pn = if (panelHva()) 1f else 0f; val sp = if (compare) 0.5f else 0f
         fun fx(target: Int, lite: Boolean, tone: Float) = listOf(AiSharpen(target, sh, tone, lite, dt, sp, pn))
         val h = f?.height ?: 0; val w = f?.width ?: 0
         val hdr = f?.colorInfo?.let { it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 || it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG } ?: false
         if (hdr) return Plan("hdr", emptyList(), if (hwAi) "IA da TV · HDR" else "HDR original", 0, 0)
         if (h <= 0) return Plan("wait", emptyList(), "", 0, 0)
+        if (live) return Plan("live", emptyList(), if (hwAi) "Direto · IA da TV" else "Direto", 0, h)
         val tag = (if (compare) "c" else "") + PP.sharpLevel + pn
         if (mode == "off") return if (compare) Plan("off$tag", fx(0, true, 0.4f), "Comparando: original | IA", 0, h) else Plan("off", emptyList(), "", 0, 0)
         val want = when (mode) { "1440" -> 2; "1080" -> 1; else -> maxTier() }
@@ -205,6 +206,9 @@ private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, p
             program.setFloatUniform("uDetail", detail)
             program.setFloatUniform("uSplit", split)
             program.setFloatUniform("uPanel", panel)
+            program.setFloatUniform("uVib", SceneAi.vib)
+            program.setFloatUniform("uSkin", SceneAi.skin)
+            program.setFloatUniform("uShadow", SceneAi.shadow)
             program.setFloatUniform("uTone", tone)
             program.bindAttributesAndUniforms()
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -242,6 +246,9 @@ uniform float uTone;
 uniform float uDetail;
 uniform float uSplit;
 uniform float uPanel;
+uniform float uVib;
+uniform float uSkin;
+uniform float uShadow;
 varying vec2 vTexSamplingCoord;
 
 vec3 tx(vec2 p) { return texture2D(uTexSampler, p).rgb; }
@@ -290,6 +297,15 @@ void main() {
   o = mix(o, sc, uTone * 0.22);
   o += uTone * 0.035 * (1.0 - o) * (1.0 - smoothstep(0.0, 0.35, y));
   // painel HVA (VA): sobe de leve o quase-preto (menos rastro escuro e sombras com detalhe)
+  // IA de cena: cores vivas e fiéis. Realça mais as cores apagadas (vibrance) e protege o tom de pele.
+  float lu = dot(o, vec3(0.2126, 0.7152, 0.0722));
+  float sat = max(o.r, max(o.g, o.b)) - min(o.r, min(o.g, o.b));
+  float cr = 0.5 * o.r - 0.4187 * o.g - 0.0813 * o.b;
+  float cb = -0.1687 * o.r - 0.3313 * o.g + 0.5 * o.b;
+  float skin = smoothstep(0.02, 0.06, cr) * (1.0 - smoothstep(0.17, 0.23, cr)) * smoothstep(-0.22, -0.12, cb) * (1.0 - smoothstep(-0.02, 0.04, cb));
+  float vib = uVib * (1.0 - sat) * (1.0 - skin * uSkin);
+  o = mix(vec3(lu), o, 1.0 + vib);
+  o += uShadow * 0.06 * (1.0 - smoothstep(0.0, 0.3, lu)); // cena escura: abre as sombras sem lavar os pretos
   if (uPanel > 0.5) o = o * 0.975 + 0.025 * (1.0 - smoothstep(0.0, 0.25, o));
   vec3 res = clamp(o, 0.0, 1.0);
   if (uSplit > 0.0) {
@@ -317,5 +333,62 @@ void main() {
         GLES20.glUniform2f(GLES20.glGetUniformLocation(p, "uTexel"), tx, ty)
         GLES20.glUniform1f(GLES20.glGetUniformLocation(p, "uSharp"), sharp); GLES20.glUniform1f(GLES20.glGetUniformLocation(p, "uTone"), tone)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+    }
+}
+
+
+/**
+ * IA de cena (só em filmes e séries): a cada 2 s olha uma miniatura de 64×36 da imagem e reconhece
+ * o tipo de cena pela distribuição de cores — pessoas (tom de pele), paisagem (verde e céu), cena escura
+ * ou ambiente/objetos — e ajusta realce de cor, proteção de pele e sombras. Os valores mudam aos poucos
+ * (sem pulos) e o shader lê na hora, sem recriar o vídeo.
+ */
+object SceneAi {
+    @Volatile var vib = 0f
+    @Volatile var skin = 1f
+    @Volatile var shadow = 0f
+    @Volatile var on = false
+    var scene = ""
+        private set
+    private var tVib = 0f; private var tSkin = 1f; private var tShadow = 0f
+
+    fun reset(enabled: Boolean) { on = enabled; vib = 0f; skin = 1f; shadow = 0f; tVib = if (enabled) .22f else 0f; tSkin = 1f; tShadow = 0f; scene = "" }
+
+    fun analyze(b: android.graphics.Bitmap) {
+        if (!on) return
+        val w = b.width; val h = b.height; if (w == 0 || h == 0) return
+        var skinN = 0; var green = 0; var sky = 0; var lum = 0f; var satSum = 0f; var n = 0
+        val hsv = FloatArray(3)
+        var y = 0
+        while (y < h) {
+            var x = 0
+            while (x < w) {
+                val c = b.getPixel(x, y)
+                val r = (c shr 16 and 255) / 255f; val g = (c shr 8 and 255) / 255f; val bl = (c and 255) / 255f
+                val cr = .5f * r - .4187f * g - .0813f * bl; val cb = -.1687f * r - .3313f * g + .5f * bl
+                if (cr in .03f..0.2f && cb in -.2f..0f && r > .2f) skinN++
+                android.graphics.Color.colorToHSV(c, hsv)
+                if (hsv[1] > .25f && hsv[2] > .2f) { if (hsv[0] in 70f..170f) green++; if (hsv[0] in 190f..240f && y < h / 2) sky++ }
+                lum += .2126f * r + .7152f * g + .0722f * bl; satSum += hsv[1]; n++
+                x += 2
+            }
+            y += 2
+        }
+        if (n == 0) return
+        val fSkin = skinN.toFloat() / n; val fNat = (green + sky).toFloat() / n; val l = lum / n; val s = satSum / n
+        // cores já muito vivas (desenho animado, show) recebem menos realce, para não estourar
+        val tame = if (s > .55f) .5f else 1f
+        when {
+            l < .22f -> { scene = "Cena escura"; tVib = .15f * tame; tSkin = 1f; tShadow = 1f }
+            fSkin > .10f -> { scene = "Pessoas"; tVib = .18f * tame; tSkin = 1f; tShadow = .3f }
+            fNat > .25f -> { scene = "Paisagem"; tVib = .38f * tame; tSkin = .6f; tShadow = .2f }
+            else -> { scene = "Ambiente"; tVib = .26f * tame; tSkin = .9f; tShadow = .25f }
+        }
+    }
+
+    /** Chamado a cada 0,5 s: aproxima os valores do alvo devagar (troca suave em ~2 s). */
+    fun step() {
+        if (!on) { vib = 0f; shadow = 0f; return }
+        vib += (tVib - vib) * .25f; skin += (tSkin - skin) * .25f; shadow += (tShadow - shadow) * .25f
     }
 }

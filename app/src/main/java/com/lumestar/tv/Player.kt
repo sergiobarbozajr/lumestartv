@@ -202,7 +202,7 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
                     .build()
         }
         avDelay.targetMs = PP.avMs
-        player = ExoPlayer.Builder(ctx, rf).setMediaSourceFactory(msf).setLoadControl(load).build()
+        player = ExoPlayer.Builder(ctx, rf).setMediaSourceFactory(msf).setLoadControl(load).setBandwidthMeter(Bandwidth.get(ctx)).build()
         applyQuality()
     }
 
@@ -315,9 +315,10 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
 
     /** IA de imagem: decide pelo diagnóstico do aparelho e pelo disjuntor (Ultra 1440p, Alta 1080p ou modo leve). */
     fun applyAi() {
-        val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare)
-        val smooth = PP.smooth && !ai.smoothOff && player.videoFormat != null
-        aiLabel = plan.label + if (smooth) (if (plan.label.isBlank()) "" else " · ") + "Movimento 60 Hz" else ""
+        SceneAi.on = !req.live && PP.aiUp != "off"
+        val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live)
+        val smooth = PP.smooth && !ai.smoothOff && !req.live && player.videoFormat != null
+        aiLabel = plan.label + (if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else "") + if (smooth) (if (plan.label.isBlank()) "" else " · ") + "Movimento 60 Hz" else ""
         ai.tier = plan.tier; ai.outH = plan.outH
         val key = plan.key + if (smooth) "+60" else ""
         if (key == ai.key) return
@@ -325,6 +326,11 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         val fx = if (smooth) plan.effects + MotionSmooth() else plan.effects
         if (fx.isEmpty() && !ai.hadFx) return
         try { player.setVideoEffects(fx); ai.hadFx = fx.isNotEmpty() || ai.hadFx } catch (e: Throwable) { ai.cap = 0; ai.smoothOff = true; aiLabel = "" }
+    }
+
+    fun applyAiLabel() {
+        val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live)
+        aiLabel = plan.label + (if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else "") + if (PP.smooth && !ai.smoothOff && !req.live) " · Movimento 60 Hz" else ""
     }
 
     fun stepDown(why: String) {
@@ -425,12 +431,15 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             (ctx as? android.app.Activity)?.window?.let { w -> if (w.attributes.preferredDisplayModeId != 0) w.attributes = w.attributes.also { it.preferredDisplayModeId = 0 } }
         }
     }
-    LaunchedEffect(Unit) { PlayerDiag.rebuffers = 0; PlayerDiag.lastTitle = req.title }
+    LaunchedEffect(Unit) { PlayerDiag.rebuffers = 0; PlayerDiag.lastTitle = req.title; SceneAi.reset(!req.live && PP.aiUp != "off") }
     LaunchedEffect(url, attempt, subUrl, audioUrl) { eng.load(url, subUrl, audioUrl, if (req.live) 0L else startAt) }
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }
     LaunchedEffect(Unit) {
         var n = 0
-        while (true) { delay(500); pos = player.currentPosition; if (player.duration > 0) dur = player.duration; if (++n % 10 == 0) save(); if (n % 2 == 0) watchDrops() }
+        while (true) { delay(500); pos = player.currentPosition; if (player.duration > 0) dur = player.duration; if (++n % 10 == 0) save(); if (n % 2 == 0) watchDrops()
+            SceneAi.step()
+            if (SceneAi.on && n % 4 == 0 && player.isPlaying) { tv()?.let { t -> try { t.getBitmap(64, 36)?.let { b -> SceneAi.analyze(b); if (!aiLabel.contains(SceneAi.scene)) applyAiLabel() } } catch (e: Throwable) {} } }
+        }
     }
     LaunchedEffect(showUi, touch, panel) {
         if (showUi && panel == null) { delay(5000); showUi = false; try { rootFocus.requestFocus() } catch (e: Exception) {} }
@@ -764,4 +773,17 @@ private fun touchGestures(ctx: android.content.Context, live: Boolean, zap: (Int
                 }
             }
         }
+}
+
+
+/**
+ * Um medidor de banda só para o app inteiro: ao trocar de canal, o novo já começa com a velocidade
+ * medida no anterior (e, na primeira vez, com uma estimativa alta), então abre direto na qualidade cheia
+ * em vez de começar borrado e subir aos poucos.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+object Bandwidth {
+    private var m: androidx.media3.exoplayer.upstream.DefaultBandwidthMeter? = null
+    fun get(c: android.content.Context): androidx.media3.exoplayer.upstream.DefaultBandwidthMeter =
+        m ?: androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(c.applicationContext).setInitialBitrateEstimate(20_000_000L).build().also { m = it }
 }
