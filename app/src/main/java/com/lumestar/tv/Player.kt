@@ -472,10 +472,10 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 if (kc == AKey.KEYCODE_CHANNEL_UP || kc == AKey.KEYCODE_PAGE_UP) { zap(1); return@onKeyEvent true }
                 if (kc == AKey.KEYCODE_CHANNEL_DOWN || kc == AKey.KEYCODE_PAGE_DOWN) { zap(-1); return@onKeyEvent true }
                 if (showUi) return@onKeyEvent false
-                // ao vivo: ▲ ▶ próximo canal, ▼ ◀ canal anterior
+                // ao vivo: ▲ próximo canal, ▼ canal anterior
                 if (req.live && chans.size > 1) when (kc) {
-                    AKey.KEYCODE_DPAD_UP, AKey.KEYCODE_DPAD_RIGHT -> { zap(1); return@onKeyEvent true }
-                    AKey.KEYCODE_DPAD_DOWN, AKey.KEYCODE_DPAD_LEFT -> { zap(-1); return@onKeyEvent true }
+                    AKey.KEYCODE_DPAD_UP -> { zap(1); return@onKeyEvent true }
+                    AKey.KEYCODE_DPAD_DOWN -> { zap(-1); return@onKeyEvent true }
                 }
                 when (kc) {
                     AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER, AKey.KEYCODE_NUMPAD_ENTER, AKey.KEYCODE_MEDIA_PLAY_PAUSE -> { if (player.isPlaying) player.pause() else player.play(); showControls(); wantPlay++; true }
