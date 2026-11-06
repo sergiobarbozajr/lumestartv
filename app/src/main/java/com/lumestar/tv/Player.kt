@@ -575,7 +575,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         }
         panel?.let { p ->
             Column(
-                Modifier.align(Alignment.CenterEnd).padding(end = 18.dp, bottom = 60.dp).width(320.dp).height(330.dp)
+                Modifier.align(Alignment.CenterEnd).padding(end = 18.dp, bottom = 60.dp).width(360.dp).height(330.dp)
                     .clip(RoundedCornerShape(16.dp)).background(Color(0xF50A0E28)).border(1.dp, C.line, RoundedCornerShape(16.dp))
                     .verticalScroll(rememberScrollState()).padding(16.dp).focusGroup(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
