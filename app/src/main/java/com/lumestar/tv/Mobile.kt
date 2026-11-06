@@ -126,7 +126,8 @@ private fun MobileShell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     val p = st.player
     if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { key(p.id, p.url) { PlayerScreen(st, p, touchMode = true) } } }; MToast(st); return }
 
-    Column(Modifier.fillMaxSize().background(C.bg).statusBarsPadding().navigationBarsPadding()) {
+    ThemeBackdrop()
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         MTop(st) { stack.add("pesquisa") }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {

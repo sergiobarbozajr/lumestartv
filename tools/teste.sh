@@ -129,6 +129,17 @@ if grep -q "ANR in\|FATAL" teste/grande_problemas.txt; then echo "lista grande: 
 adb shell pidof $PKG > /dev/null || echo "lista grande: o app fechou" >> teste/falhou.txt
 
 adb shell dumpsys gfxinfo $PKG > teste/gfx_total.txt 2>&1 || true
+# tema com foto (como no AstroLume) e Movimento 60 Hz
+abre --es tema galaxia --es pagina inicio
+sleep 3; shot "tema_galaxia_inicio"
+abre --es pagina config
+key KEYCODE_DPAD_RIGHT 1
+sleep 1; shot "tema_galaxia_config"
+abre --ez movimento true --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
+sleep 5; shot "movimento60"
+adb logcat -d | grep -iE "VideoFrameProcessingException|FrameDoubler|Movimento" | tail -5 > teste/movimento.txt
+abre --ez movimento false --es tema cosmos --es pagina inicio
+
 # ---- versão de celular (toque) ----
 adb shell settings put system accelerometer_rotation 0
 cel

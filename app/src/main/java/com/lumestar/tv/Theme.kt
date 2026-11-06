@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.Font
@@ -16,14 +17,33 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 
-class Pal(val name: String, val bg: Color, val panel: Color, val panel2: Color, val line: Color, val muted: Color, val dim: Color, val a1: Color, val a2: Color, val glow: Color)
+class Pal(val name: String, val bg: Color, val panel: Color, val panel2: Color, val line: Color, val muted: Color, val dim: Color, val a1: Color, val a2: Color, val glow: Color, val img: Int = 0)
 
 val THEMES = linkedMapOf(
     "cosmos" to Pal("Cosmos", Color(0xFF050816), Color(0xFF0E1538), Color(0xFF151E4E), Color(0xFF243069), Color(0xFF9AA6D6), Color(0xFF5F6AA0), Color(0xFF5AA8FF), Color(0xFFB48CFF), Color(0x8C6E96FF)),
     "aurora" to Pal("Aurora", Color(0xFF03110F), Color(0xFF0A2824), Color(0xFF0F3630), Color(0xFF1C5047), Color(0xFF94C7BB), Color(0xFF5A8C80), Color(0xFF3EE6B0), Color(0xFF5AB8FF), Color(0x8C3EE6B0)),
     "nebulosa" to Pal("Nebulosa", Color(0xFF0F0519), Color(0xFF230E38), Color(0xFF2F144A), Color(0xFF4A236E), Color(0xFFC3A0D8), Color(0xFF7F5E99), Color(0xFFFF6FD8), Color(0xFFB48CFF), Color(0x8CFF6FD8)),
     "solar" to Pal("Solar", Color(0xFF130A03), Color(0xFF2C190A), Color(0xFF3A210D), Color(0xFF5A3716), Color(0xFFD8B894), Color(0xFF977554), Color(0xFFFFB347), Color(0xFFFF6F4E), Color(0x8CFFB347)),
+    // temas com imagem de fundo, os mesmos do AstroLume TV (paleta tirada de cada imagem)
+    "galaxia" to space("Galáxia", R.drawable.bg_nebula, 0xFF6CC6FF, 0xFF1A1F2C, 0xFF232A3B, 0xFF161A24, 0xFFDCE6F5, 0xFFB9C6DA),
+    "planetas" to space("Planetas", R.drawable.bg_planets, 0xFF9DB8FF, 0xFF1B1E2E, 0xFF262A3E, 0xFF171A27, 0xFFDCE6F5, 0xFFB9C6DA),
+    "orbitas" to space("Órbitas", R.drawable.bg_orbits, 0xFFFFC86E, 0xFF1E1C24, 0xFF2A2732, 0xFF19171E, 0xFFF3EADB, 0xFFD6C8B3),
+    "mar" to space("Mar alienígena", R.drawable.bg_ocean, 0xFF7FE3E0, 0xFF14242A, 0xFF1C3138, 0xFF111E23, 0xFFDCE6F5, 0xFFB9C6DA),
+    "deserto" to space("Deserto", R.drawable.bg_desert, 0xFFFFB067, 0xFF2A1E16, 0xFF38281D, 0xFF231912, 0xFFFBEBDD, 0xFFE4CDB5),
+    "plutao" to space("Plutão gelado", R.drawable.bg_pluto, 0xFFA9D4FF, 0xFF1B222C, 0xFF26303D, 0xFF161C24, 0xFFDCE6F5, 0xFFB9C6DA),
+    "cratera" to space("Cratera ao sol", R.drawable.bg_crater, 0xFFFFE3A8, 0xFF222121, 0xFF2E2D2C, 0xFF1C1B1B, 0xFFF2EDE6, 0xFFD2CBC2),
+    "marte" to space("Marte", R.drawable.bg_mars, 0xFFFF9E7A, 0xFF2E1D16, 0xFF3B2820, 0xFF261811, 0xFFFBE8E0, 0xFFE6C9BC),
+    "jupiter" to space("Tempestade em Júpiter", R.drawable.bg_jupiter, 0xFFFFB357, 0xFF25160B, 0xFF33200F, 0xFF1F1209, 0xFFFBEBD6, 0xFFE5CBA6),
+    "venus" to space("Vênus vulcânico", R.drawable.bg_lava, 0xFFFF7A2E, 0xFF26170C, 0xFF34200F, 0xFF1F1309, 0xFFFBE7D3, 0xFFE6C6A3),
+    "terra" to space("Terra vista da Lua", R.drawable.bg_earthrise, 0xFF6FB6FF, 0xFF1C1E22, 0xFF282B30, 0xFF17191C, 0xFFDCE6F5, 0xFFB9C6DA),
 )
+
+/** Tema com foto de fundo: cartões e painéis em vidro escuro tingido pela foto. */
+private fun space(name: String, img: Int, accent: Long, card: Long, cardHi: Long, panel: Long, light: Long, dim: Long): Pal {
+    val a = Color(accent)
+    return Pal(name, Color(panel), Color(card).copy(alpha = .88f), Color(cardHi).copy(alpha = .92f), Color(cardHi).copy(alpha = 1f).let { Color((it.red + .08f).coerceAtMost(1f), (it.green + .08f).coerceAtMost(1f), (it.blue + .08f).coerceAtMost(1f)) },
+        Color(light), Color(dim).copy(alpha = .75f), a, Color(light), a.copy(alpha = .55f), img)
+}
 
 /** Cores do LumeStarTV. Mudam na hora quando o tema é trocado em Configurações › Tema do app. */
 object C {
@@ -97,4 +117,14 @@ class Prefs(c: Context) {
     var keymap: String
         get() = sp.getString("teclas", "") ?: ""
         set(v) = sp.edit().putString("teclas", v).apply()
+}
+
+
+/** Foto do tema por trás de tudo, escurecida para o texto continuar legível. */
+@androidx.compose.runtime.Composable
+fun ThemeBackdrop() {
+    val img = C.pal.img
+    if (img == 0) return
+    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(img), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop, alpha = .55f)
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(C.bg.copy(alpha = .35f), C.bg.copy(alpha = .78f)))))
 }

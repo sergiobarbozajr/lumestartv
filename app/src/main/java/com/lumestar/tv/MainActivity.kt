@@ -31,6 +31,9 @@ class MainActivity : ComponentActivity() {
         GpuProbe.load(PP.sp, BuildConfig.VERSION_NAME)
         if (GpuProbe.result == null) android.os.Handler(mainLooper).postDelayed({ GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) }, 20_000)
         KeyMap.init(prefs)
+        // atalhos de teste: --es tema <id>, --ez movimento true
+        intent?.getStringExtra("tema")?.let { t -> if (THEMES.containsKey(t)) prefs.theme = t }
+        if (intent?.hasExtra("movimento") == true) PP.smooth = intent.getBooleanExtra("movimento", false)
         C.pal = THEMES[prefs.theme] ?: C.pal
         Catalog.rev.let { } // cria o catálogo (e seus estados) na linha da tela, antes da linha de fundo
         OfflineScan.running.let { }

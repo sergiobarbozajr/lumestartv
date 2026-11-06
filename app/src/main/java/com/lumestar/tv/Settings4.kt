@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -74,6 +75,8 @@ fun AiImagePanel(st: AppState, locked: Boolean) {
     Opts("Intensidade da nitidez", SHARP, PP.sharpLevel, locked) { PP.sharpLevel = it }
     Opts("Painel da TV", PANELS, PP.panel, locked) { PP.panel = it }
     T("HVA é o painel VA da TCL: pretos profundos e alto contraste. Nesse perfil a IA segura a nitidez nas sombras (evita halos) e sobe de leve o quase-preto, o que reduz o rastro em cenas escuras. Automático usa HVA em TVs TCL" + if (ImageAi.tclPanel) " (esta é uma TCL)." else ".", 11, C.dim, lineHeight = 15)
+    Opts("Suavizar movimento 60 Hz (experimental)", linkedMapOf("1" to "Ligado", "0" to "Desligado"), if (PP.smooth) "1" else "0", locked) { PP.smooth = it == "1" }
+    T("Cria um quadro intermediário entre cada par de quadros: 24→48, 25→50, 30→60 quadros por segundo. Movimento mais liso em futebol e câmera andando. Não é igual ao MEMC da TV: em movimentos muito rápidos pode aparecer um leve rastro. Desliga sozinho se a TV perder quadros.", 11, C.dim, lineHeight = 15)
     Opts("Frequência da tela igual à do vídeo", linkedMapOf("1" to "Ligada", "0" to "Desligada"), if (PP.matchHz) "1" else "0", locked) { PP.matchHz = it == "1" }
     Opts("Realce de cor e contraste", ENHANCE, PP.enhance, locked) { PP.enhance = it }
     Opts("Modo de imagem", PRESETS, PP.preset, locked) { PP.preset = it }
@@ -101,13 +104,17 @@ fun AiAudioPanel(st: AppState, locked: Boolean) {
 // ---------------- Tema ----------------
 @Composable
 fun ThemePanel(st: AppState, locked: Boolean) {
-    T("Muda as cores do aplicativo inteiro na hora.", 13, C.muted)
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        THEMES.forEach { (id, p) ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.width(92.dp).height(54.dp).clip(RoundedCornerShape(10.dp)).background(Brush.linearGradient(listOf(p.bg, p.panel2, p.a1, p.a2)))
-                    .border(if (C.pal === p) 2.dp else 1.dp, if (C.pal === p) p.a1 else C.line, RoundedCornerShape(10.dp)))
-                Btn(p.name, on = C.pal === p, locked = locked) { C.pal = p; st.prefs.theme = id }
+    T("Muda as cores do app inteiro na hora. Os temas com foto (como no AstroLume TV) colocam a imagem por trás das telas.", 13, C.muted, lineHeight = 19)
+    THEMES.entries.chunked(4).forEach { row ->
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            row.forEach { (id, p) ->
+                Column(Modifier.width(132.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.width(132.dp).height(72.dp).clip(RoundedCornerShape(10.dp)).background(Brush.linearGradient(listOf(p.bg, p.panel2, p.a1, p.a2)))
+                        .border(if (C.pal === p) 2.dp else 1.dp, if (C.pal === p) p.a1 else C.line, RoundedCornerShape(10.dp))) {
+                        if (p.img != 0) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(p.img), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                    }
+                    Btn(p.name, on = C.pal === p, locked = locked) { C.pal = p; st.prefs.theme = id }
+                }
             }
         }
     }

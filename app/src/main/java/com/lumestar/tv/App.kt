@@ -213,6 +213,7 @@ fun LumeApp(prefs: Prefs, args: LaunchArgs = LaunchArgs(), finish: () -> Unit) {
 
     DesignScale {
         Box(Modifier.fillMaxSize().background(C.bg)) {
+            ThemeBackdrop()
             if (phase != "intro") Shell(st, args, finish)
             if (phase == "intro") {
                 Box(Modifier.fillMaxSize()) { IntroScreen(prefs.sounds) { phase = "open" } }
@@ -322,7 +323,7 @@ private fun Sidebar(st: AppState, locked: Boolean) {
     val center = with(d) { Offset(480.dp.toPx(), 270.dp.toPx()) }
     Column(
         Modifier.fillMaxHeight().width(w)
-            .drawBehind { drawRect(Brush.horizontalGradient(if (st.navHasFocus) listOf(Color(0xFF070C26), Color(0xFA050816)) else listOf(Color(0xF2070C26), Color(0xEB050816))), alpha = Opening.block(st.openT, 0)) }
+            .drawBehind { drawRect(Brush.horizontalGradient(if (st.navHasFocus) listOf(C.bg.copy(alpha = .82f), C.bg.copy(alpha = .62f)) else listOf(C.bg.copy(alpha = .55f), C.bg.copy(alpha = .30f))), alpha = Opening.block(st.openT, 0)) }
             .onFocusChanged { st.navHasFocus = it.hasFocus }
             // ao voltar do conteúdo para o menu, o foco vai para a aba aberta (não para a opção mais próxima)
             .focusProperties { enter = { st.navReq[st.page] ?: FocusRequester.Default } }
@@ -335,7 +336,6 @@ private fun Sidebar(st: AppState, locked: Boolean) {
             val logo = TextStyle(fontFamily = F.logo, fontSize = 36.sp)
             Box(Modifier.padding(start = 6.dp)) {
                 GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo)
-                GradientText(if (st.navHasFocus) "LumeStarTV" else "L", logo, Modifier.offset(y = 24.dp).graphicsLayer { scaleY = -1f; alpha = .22f })
             }
         }
         Spacer(Modifier.height(4.dp))
