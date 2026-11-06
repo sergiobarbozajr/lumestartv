@@ -64,7 +64,15 @@ object PhoneServer {
         val first = head.lineSequence().firstOrNull() ?: return
         val len = Regex("(?i)content-length:\\s*(\\d+)").find(head)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         var msg = ""
-        if (first.startsWith("POST") && len in 1..20000) {
+        val boundary = Regex("(?i)content-type:\\s*multipart/form-data;\\s*boundary=([^\\r\\n;]+)").find(head)?.groupValues?.get(1)?.trim('"')
+        if (first.startsWith("POST") && boundary != null && len in 1..20_000_000) {
+            // imagem do tema (envio de arquivo)
+            val body = ByteArray(len); var got = 0
+            while (got < len) { val n = ins.read(body, got, len - got); if (n < 0) break; got += n }
+            val data = filePart(body, got, boundary)
+            msg = if (data != null && CustomTheme.save(data)) { main.post { onReceive?.invoke(mapOf("tipo" to "tema")) }; "<p class=ok>Imagem recebida! O tema Anime já está na TV.</p>" }
+                  else "<p class=err>Não consegui ler a imagem. Use uma foto JPG ou PNG.</p>"
+        } else if (first.startsWith("POST") && len in 1..20000) {
             val body = ByteArray(len); var got = 0
             while (got < len) { val n = ins.read(body, got, len - got); if (n < 0) break; got += n }
             val form = String(body, 0, got, Charsets.UTF_8).split("&").mapNotNull {
@@ -80,6 +88,15 @@ object PhoneServer {
         val out = c.getOutputStream()
         out.write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${html.size}\r\nConnection: close\r\n\r\n".toByteArray())
         out.write(html); out.flush()
+    }
+
+    /** Pega os bytes do arquivo enviado num formulário multipart. */
+    private fun filePart(b: ByteArray, n: Int, boundary: String): ByteArray? {
+        fun find(p: ByteArray, from: Int): Int { outer@ for (i in from..n - p.size) { for (j in p.indices) if (b[i + j] != p[j]) continue@outer; return i }; return -1 }
+        val fn = find("filename=".toByteArray(), 0); if (fn < 0) return null
+        val st = find("\r\n\r\n".toByteArray(), fn); if (st < 0) return null
+        val end = find(("\r\n--" + boundary).toByteArray(), st + 4); if (end < 0) return null
+        return b.copyOfRange(st + 4, end)
     }
 
     private fun page(msg: String) = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -100,5 +117,8 @@ button{font-size:16px;font-weight:700;padding:12px;border:0;border-radius:10px;b
 <button>Enviar conta para a TV</button></form>
 <form method="post"><h2>Chave do TMDB (capas e sinopses)</h2><input type="hidden" name="tipo" value="tmdb">
 <input name="chave" placeholder="Chave da API do TMDB" required autocapitalize="off" autocomplete="off" spellcheck="false">
-<button>Enviar chave para a TV</button></form></body></html>"""
+<button>Enviar chave para a TV</button></form>
+<form method="post" enctype="multipart/form-data"><h2>Imagem do tema Anime</h2>
+<input type="file" name="imagem" accept="image/*" required>
+<button>Enviar imagem para a TV</button></form></body></html>"""
 }

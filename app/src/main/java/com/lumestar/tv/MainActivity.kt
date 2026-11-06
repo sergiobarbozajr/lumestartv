@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
         GpuProbe.load(PP.sp, BuildConfig.VERSION_NAME)
         if (GpuProbe.result == null) android.os.Handler(mainLooper).postDelayed({ GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) }, 20_000)
         KeyMap.init(prefs)
+        CustomTheme.init(this)
         // atalhos de teste: --es tema <id>, --ez movimento true
         intent?.getStringExtra("tema")?.let { t -> if (THEMES.containsKey(t)) prefs.theme = t }
         if (intent?.hasExtra("movimento") == true) PP.smooth = intent.getBooleanExtra("movimento", false)

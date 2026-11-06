@@ -136,7 +136,10 @@ fun PhoneBox(st: AppState) {
     val ip = remember { PhoneServer.address() }
     DisposableEffect(Unit) {
         val mine: (Map<String, String>) -> Unit = { f ->
-            if (f["tipo"] == "tmdb") {
+            if (f["tipo"] == "tema") {
+                CustomTheme.load(); THEMES[CustomTheme.ID]?.let { C.pal = it; st.prefs.theme = CustomTheme.ID }
+                st.say("Imagem recebida: tema Anime aplicado")
+            } else if (f["tipo"] == "tmdb") {
                 st.say("Chave do TMDB recebida. Testando…")
                 val k = f["chave"].orEmpty()
                 Tmdb.test(k) { m, ok -> if (ok) { Tmdb.setKey(k); st.say("TMDB ligado. As capas vão aparecendo nas abas.") } else st.say(m) }
@@ -173,7 +176,7 @@ fun PhoneBox(st: AppState) {
         else {
             T("No celular, conectado ao mesmo Wi-Fi da TV, abra no navegador:", 12, C.muted)
             T("http://$ip:${PhoneServer.PORT}", 20, C.fg, FontWeight.ExtraBold)
-            T("Cole o link da lista, os dados da conta ou a chave do TMDB e toque em Enviar. A TV recebe na hora.", 12, C.muted)
+            T("Cole o link da lista, os dados da conta, a chave do TMDB ou escolha a imagem do tema e toque em Enviar. A TV recebe na hora.", 12, C.muted)
         }
     }
 }

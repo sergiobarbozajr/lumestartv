@@ -17,7 +17,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 
-class Pal(val name: String, val bg: Color, val panel: Color, val panel2: Color, val line: Color, val muted: Color, val dim: Color, val a1: Color, val a2: Color, val glow: Color, val img: Int = 0)
+class Pal(val name: String, val bg: Color, val panel: Color, val panel2: Color, val line: Color, val muted: Color, val dim: Color, val a1: Color, val a2: Color, val glow: Color, val img: Int = 0, val custom: Boolean = false)
 
 val THEMES = linkedMapOf(
     "cosmos" to Pal("Cosmos", Color(0xFF050816), Color(0xFF0E1538), Color(0xFF151E4E), Color(0xFF243069), Color(0xFF9AA6D6), Color(0xFF5F6AA0), Color(0xFF5AA8FF), Color(0xFFB48CFF), Color(0x8C6E96FF)),
@@ -124,7 +124,10 @@ class Prefs(c: Context) {
 @androidx.compose.runtime.Composable
 fun ThemeBackdrop() {
     val img = C.pal.img
-    if (img == 0) return
-    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(img), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop, alpha = .55f)
+    CustomTheme.rev.let { }
+    val cb = if (C.pal.custom) CustomTheme.bmp else null
+    if (img == 0 && cb == null) return
+    if (cb != null) androidx.compose.foundation.Image(cb, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop, alpha = .6f)
+    else androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(img), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop, alpha = .55f)
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(C.bg.copy(alpha = .35f), C.bg.copy(alpha = .78f)))))
 }

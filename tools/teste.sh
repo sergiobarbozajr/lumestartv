@@ -37,6 +37,11 @@ for t in 1 2 3; do
   echo "tentativa $t sem resposta" >> teste/celular_tentativas.txt; adb shell netstat -ltn 2>/dev/null | grep 8765 >> teste/celular_tentativas.txt; sleep 4
 done
 grep -q "Enviado" teste/celular_resposta.html && echo "celular: enviado" >> teste/resumo_extra.txt || echo "celular: FALHOU" >> teste/resumo_extra.txt
+# imagem do tema Anime enviada pelo "celular" (formulário com arquivo)
+convert -size 1280x720 gradient:"#1a3a8a"-"#e8702a" -fill "#7fd6ff" -draw "circle 420,330 520,330" teste/tema.jpg 2>/dev/null || python3 -c "open('teste/tema.jpg','wb').write(b'')"
+curl -s -m 30 -F "imagem=@teste/tema.jpg;type=image/jpeg" http://127.0.0.1:8765/ > teste/tema_resposta.html
+grep -q "Imagem recebida" teste/tema_resposta.html && echo "tema anime: recebido" >> teste/resumo_extra.txt || echo "tema anime: FALHOU" >> teste/resumo_extra.txt
+sleep 2; shot "tema_anime"
 sleep 20
 shot "lista_recebida"
 

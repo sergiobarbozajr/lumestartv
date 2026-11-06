@@ -105,6 +105,7 @@ fun AiAudioPanel(st: AppState, locked: Boolean) {
 @Composable
 fun ThemePanel(st: AppState, locked: Boolean) {
     T("Muda as cores do app inteiro na hora. Os temas com foto (como no AstroLume TV) colocam a imagem por trás das telas.", 13, C.muted, lineHeight = 19)
+    CustomTheme.rev.let { }
     THEMES.entries.chunked(4).forEach { row ->
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             row.forEach { (id, p) ->
@@ -112,12 +113,17 @@ fun ThemePanel(st: AppState, locked: Boolean) {
                     Box(Modifier.width(132.dp).height(72.dp).clip(RoundedCornerShape(10.dp)).background(Brush.linearGradient(listOf(p.bg, p.panel2, p.a1, p.a2)))
                         .border(if (C.pal === p) 2.dp else 1.dp, if (C.pal === p) p.a1 else C.line, RoundedCornerShape(10.dp))) {
                         if (p.img != 0) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(p.img), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                        if (p.custom) CustomTheme.bmp?.let { androidx.compose.foundation.Image(it, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
                     }
                     Btn(p.name, on = C.pal === p, locked = locked) { C.pal = p; st.prefs.theme = id }
                 }
             }
         }
     }
+    T("TEMA ANIME (SUA IMAGEM)", 10, C.muted, FontWeight.Bold)
+    T(if (CustomTheme.has) "Sua imagem está salva só neste aparelho. Para trocar, mande outra pelo celular." else "Mande uma imagem do celular (anime, filme, paisagem…) e ela vira o fundo do app. As cores do tema saem da própria imagem. Ela fica só neste aparelho.", 12, C.muted, lineHeight = 17)
+    PhoneBox(st)
+    if (CustomTheme.has) Btn("Remover minha imagem", locked = locked) { CustomTheme.remove(); if (C.pal.custom) { C.pal = THEMES.getValue("cosmos"); st.prefs.theme = "cosmos" }; st.say("Imagem removida") }
 }
 
 // ---------------- Clima ----------------
