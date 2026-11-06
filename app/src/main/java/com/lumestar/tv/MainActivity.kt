@@ -67,13 +67,27 @@ class MainActivity : ComponentActivity() {
         if (event.action == KeyEvent.ACTION_UP && swallow.remove(code)) return true
         val mapped = KeyMap.handle(code, event.action == KeyEvent.ACTION_DOWN)
         if (mapped == null) { if (event.action == KeyEvent.ACTION_DOWN) swallow.add(code); return true }
-        if (mapped != code) return super.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, mapped, event.repeatCount, event.metaState, event.deviceId, event.scanCode, event.flags, event.source))
+        if (mapped != code) return safeDispatch(KeyEvent(event.downTime, event.eventTime, event.action, mapped, event.repeatCount, event.metaState, event.deviceId, event.scanCode, event.flags, event.source))
         val skip = IntroSkip.handler
         if (skip != null) {
             if (event.action == KeyEvent.ACTION_UP) skip()
             return true
         }
-        return super.dispatchKeyEvent(event)
+        return safeDispatch(event)
+    }
+
+    /**
+     * Falha conhecida do Compose 1.6: ao navegar rápido numa fileira longa, a busca de foco consulta uma capa
+     * que acabou de sair da memória e lança IllegalStateException ("...only valid when isAttached is true").
+     * Em vez de fechar o app, esse aperto de tecla é ignorado.
+     */
+    private fun safeDispatch(event: KeyEvent): Boolean = try {
+        super.dispatchKeyEvent(event)
+    } catch (e: IllegalStateException) {
+        val m = e.message ?: ""
+        if (m.contains("isAttached") || m.contains("LayoutCoordinate") || e.stackTrace.any { it.className.contains("compose.ui.focus") }) {
+            android.util.Log.w("LumeStar", "busca de foco ignorada: $m"); true
+        } else throw e
     }
 
     override fun onPause() {
