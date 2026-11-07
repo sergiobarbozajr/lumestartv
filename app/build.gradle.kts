@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.lumestar.tv"
-        minSdk = 24
+        minSdk = 21
         targetSdk = 34
         versionCode = 35
         versionName = "0.8.1"
@@ -18,13 +18,20 @@ android {
         buildConfigField("String", "TMDB_KEY2", "\"" + (System.getenv("TMDB_KEY_2") ?: "").filter { it.isLetterOrDigit() } + "\"")
     }
 
+    // Chave própria do LumeStarTV: a TV só aceita atualizações assinadas com ela.
+    // O arquivo e as senhas NUNCA ficam no repositório — vêm de segredos do GitHub
+    // na hora de compilar (STORE_FILE, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD).
+    // Para compilar no PC, aponte STORE_FILE para a sua lumestar.keystore local.
+    val keystorePath = System.getenv("STORE_FILE")
+    val temAssinatura = keystorePath != null && file(keystorePath).exists()
     signingConfigs {
-        create("lumestar") {
-            // chave própria do LumeStarTV: a TV só aceita atualizações assinadas com ela
-            storeFile = file("lumestar.keystore")
-            storePassword = "lumestartv"
-            keyAlias = "lumestar"
-            keyPassword = "lumestartv"
+        if (temAssinatura) {
+            create("lumestar") {
+                storeFile = file(keystorePath!!)
+                storePassword = System.getenv("STORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
         }
     }
 
@@ -32,10 +39,21 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("lumestar")
+            // A versão publicada PRECISA ser assinada (a TV só aceita atualização
+            // com a chave certa). Sem os segredos, o build falha de propósito,
+            // em vez de gerar um APK sem assinatura que as TVs rejeitariam.
+            if (temAssinatura) {
+                signingConfig = signingConfigs.getByName("lumestar")
+            } else {
+                throw GradleException(
+                    "Build de release sem chave de assinatura. Defina os segredos " +
+                    "STORE_FILE, STORE_PASSWORD, KEY_ALIAS e KEY_PASSWORD."
+                )
+            }
         }
         debug {
-            signingConfig = signingConfigs.getByName("lumestar")
+            // O debug pode rodar sem a chave (testes locais); se houver, usa.
+            if (temAssinatura) signingConfig = signingConfigs.getByName("lumestar")
         }
     }
     compileOptions {
