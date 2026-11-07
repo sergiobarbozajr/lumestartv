@@ -366,12 +366,19 @@ object Sfx {
     fun setVolume(level: Int) { gain = when (level) { 0 -> 0f; 1 -> 0.35f; 3 -> 1f; else -> 0.7f } }
 
     private fun make(pcm: ShortArray): AudioTrack {
-        val t = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(Synth.SR).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-            .setBufferSizeInBytes(pcm.size * 2)
-            .setTransferMode(AudioTrack.MODE_STATIC)
-            .build()
+        // AudioTrack.Builder só existe no Android 6+ (API 23); antes disso, construtor antigo
+        val t = if (android.os.Build.VERSION.SDK_INT < 23) {
+            @Suppress("DEPRECATION")
+            AudioTrack(android.media.AudioManager.STREAM_MUSIC, Synth.SR, AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT, pcm.size * 2, AudioTrack.MODE_STATIC)
+        } else {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(Synth.SR).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                .setBufferSizeInBytes(pcm.size * 2)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+        }
         t.write(pcm, 0, pcm.size)
         return t
     }

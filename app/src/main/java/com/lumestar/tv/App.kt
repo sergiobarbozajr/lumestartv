@@ -233,16 +233,20 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     val ctx = LocalContext.current
     // linha do tempo da abertura pelo buraco de minhoca
     LaunchedEffect(Unit) {
-        var playing = !st.prefs.sounds
-        val start = withFrameNanos { it }
-        st.openT = 0f
-        while (true) {
-            val now = withFrameNanos { it }
-            st.openT = ((now - start) / 1e9).toFloat()
-            if (!playing) { val pcm = Tracks.opening; if (pcm != null) { playing = true; Sfx.playLong(pcm, st.openT) } }
-            if (st.openT >= Opening.END) break
+        if (Perf.lite) {
+            st.openT = -1f // modo leve: sem buraco de minhoca, menu aparece direto
+        } else {
+            var playing = !st.prefs.sounds
+            val start = withFrameNanos { it }
+            st.openT = 0f
+            while (true) {
+                val now = withFrameNanos { it }
+                st.openT = ((now - start) / 1e9).toFloat()
+                if (!playing) { val pcm = Tracks.opening; if (pcm != null) { playing = true; Sfx.playLong(pcm, st.openT) } }
+                if (st.openT >= Opening.END) break
+            }
+            st.openT = -1f
         }
-        st.openT = -1f
         withFrameNanos { }; withFrameNanos { }
         args.page?.let { p -> if (MENU.any { it.id == p }) st.page = p }
         try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
@@ -664,6 +668,7 @@ private fun deviceInfo(ctx: Context): List<Pair<String, String>> {
         "Android" to "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
         "Processador" to "${Runtime.getRuntime().availableProcessors()} núcleos · ${Build.HARDWARE}",
         "Memória" to "%.1f GB".format(Locale("pt", "BR"), mi.totalMem / 1073741824.0),
+        "Desempenho" to Perf.reason,
         "Tela" to "${dm.widthPixels} × ${dm.heightPixels}",
         "Aplicativo" to "LumeStarTV ${Updater.currentVersion(ctx)}",
     )

@@ -28,8 +28,14 @@ class MainActivity : ComponentActivity() {
         PP.init(this)
         Tmdb.init(this)
         // diagnóstico de imagem: uma vez por versão, em segundo plano, 20 s depois de abrir (fora da abertura)
-        GpuProbe.load(PP.sp, BuildConfig.VERSION_NAME)
-        if (GpuProbe.result == null) android.os.Handler(mainLooper).postDelayed({ GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) }, 20_000)
+        Perf.init(this)
+        if (Perf.lite) {
+            // aparelho fraco: não roda o teste pesado de GPU; IA de imagem fica desligada (nível 0)
+            GpuProbe.result = GpuProbe.Result("modo leve", "", 99f, 99f, 99f)
+        } else {
+            GpuProbe.load(PP.sp, BuildConfig.VERSION_NAME)
+            if (GpuProbe.result == null) android.os.Handler(mainLooper).postDelayed({ GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) }, 20_000)
+        }
         KeyMap.init(prefs)
         CustomTheme.init(this)
         // atalhos de teste: --es tema <id>, --ez movimento true
@@ -41,10 +47,10 @@ class MainActivity : ComponentActivity() {
         Sfx.enabled = prefs.sounds
         Sfx.setVolume(prefs.volume)
         Sfx.warmUp()
-        Tracks.prepare(this)
+        if (!Perf.lite) Tracks.prepare(this) // trilhas da abertura só fazem sentido com a abertura
         createdAt = android.os.SystemClock.uptimeMillis()
         // atalhos para teste (adb): --ez sem_abertura true --es pagina config --es abrir <endereço>
-        val args = LaunchArgs(intent?.getBooleanExtra("sem_abertura", false) ?: false, intent?.getStringExtra("pagina"), intent?.getStringExtra("abrir"))
+        val args = LaunchArgs((intent?.getBooleanExtra("sem_abertura", false) ?: false) || Perf.lite, intent?.getStringExtra("pagina"), intent?.getStringExtra("abrir"))
         setContent { if (phone) MobileApp(prefs, args) { finish() } else LumeApp(prefs, args) { finish() } }
     }
 
