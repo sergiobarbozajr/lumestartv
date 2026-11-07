@@ -17,6 +17,8 @@ import java.util.concurrent.Executors
 class Meta(
     val tid: Int, val tv: Boolean, val poster: String, val backdrop: String, val overview: String, val vote: Double, val year: Int,
     var genres: String = "", var cast: String = "", var runtime: Int = 0, var cert: String = "",
+    /** Chave do trailer no YouTube; null = ainda não buscado, "" = não tem. */
+    var trailer: String? = null,
 ) {
     fun posterUrl(w: Int = 342) = if (poster.isBlank()) "" else "https://image.tmdb.org/t/p/w$w$poster"
     fun backdropUrl(w: Int = 1280) = if (backdrop.isBlank()) "" else "https://image.tmdb.org/t/p/w$w$backdrop"
@@ -56,7 +58,7 @@ object Tmdb {
             try {
                 if (file.exists()) {
                     val o = JSONObject(file.readText())
-                    o.keys().forEach { k -> val m = o.getJSONObject(k); cache[k] = Meta(m.optInt("i"), m.optBoolean("tv"), m.optString("p"), m.optString("b"), m.optString("o"), m.optDouble("v", 0.0), m.optInt("y"), m.optString("g"), m.optString("c"), m.optInt("r"), m.optString("k")) }
+                    o.keys().forEach { k -> val m = o.getJSONObject(k); cache[k] = Meta(m.optInt("i"), m.optBoolean("tv"), m.optString("p"), m.optString("b"), m.optString("o"), m.optDouble("v", 0.0), m.optInt("y"), m.optString("g"), m.optString("c"), m.optInt("r"), m.optString("k"), if (m.has("t")) m.optString("t") else null) }
                     main.post { rev++ }
                 }
             } catch (e: Exception) {}
@@ -146,15 +148,21 @@ object Tmdb {
 
     /** Gêneros, duração e elenco: só quando abre o detalhe. */
     fun details(m: Meta, done: () -> Unit) {
-        if (!on || m.tid == 0 || m.genres.isNotEmpty() || m.cast.isNotEmpty()) return
+        if (!on || m.tid == 0 || ((m.genres.isNotEmpty() || m.cast.isNotEmpty()) && m.trailer != null)) return
         pool.execute {
             try {
-                val o = get((if (m.tv) "tv/" else "movie/") + m.tid + "?append_to_response=credits," + (if (m.tv) "content_ratings" else "release_dates"))
+                val o = get((if (m.tv) "tv/" else "movie/") + m.tid + "?append_to_response=credits,videos," + (if (m.tv) "content_ratings" else "release_dates") + "&include_video_language=pt,en,null")
                 val g = o.optJSONArray("genres"); val gl = ArrayList<String>()
                 if (g != null) for (i in 0 until g.length()) gl.add(g.getJSONObject(i).optString("name"))
                 val cr = o.optJSONObject("credits")?.optJSONArray("cast"); val cl = ArrayList<String>()
                 if (cr != null) for (i in 0 until minOf(5, cr.length())) cl.add(cr.getJSONObject(i).optString("name"))
                 m.genres = gl.joinToString(", ").ifBlank { "—" }; m.cast = cl.joinToString(", ")
+                m.trailer = try {
+                    val v = o.optJSONObject("videos")?.optJSONArray("results"); val yt = ArrayList<org.json.JSONObject>()
+                    if (v != null) for (i in 0 until v.length()) { val x = v.getJSONObject(i); if (x.optString("site") == "YouTube") yt.add(x) }
+                    // prefere trailer dublado/legendado em português, depois o oficial em inglês
+                    (yt.firstOrNull { it.optString("type") == "Trailer" && it.optString("iso_639_1") == "pt" } ?: yt.firstOrNull { it.optString("type") == "Trailer" } ?: yt.firstOrNull { it.optString("type") == "Teaser" })?.optString("key") ?: ""
+                } catch (e: Exception) { "" }
                 m.runtime = o.optInt("runtime", 0).takeIf { r -> r > 0 } ?: (o.optJSONArray("episode_run_time")?.optInt(0) ?: 0)
                 m.cert = try {
                     if (m.tv) {
@@ -199,7 +207,7 @@ object Tmdb {
                 try {
                     dirty = false
                     val o = JSONObject()
-                    cache.forEach { (k, m) -> o.put(k, JSONObject().put("i", m.tid).put("tv", m.tv).put("p", m.poster).put("b", m.backdrop).put("o", m.overview).put("v", m.vote).put("y", m.year).put("g", m.genres).put("c", m.cast).put("r", m.runtime).put("k", m.cert)) }
+                    cache.forEach { (k, m) -> o.put(k, JSONObject().put("i", m.tid).put("tv", m.tv).put("p", m.poster).put("b", m.backdrop).put("o", m.overview).put("v", m.vote).put("y", m.year).put("g", m.genres).put("c", m.cast).put("r", m.runtime).put("k", m.cert).also { j -> m.trailer?.let { t -> j.put("t", t) } }) }
                     file.writeText(o.toString())
                 } catch (e: Exception) {}
                 saving = false

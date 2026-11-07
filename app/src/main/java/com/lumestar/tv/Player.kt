@@ -106,9 +106,10 @@ val AUDIO_AI = linkedMapOf("off" to "Desligado", "auto" to "Automático", "dialo
 val EQS = linkedMapOf("padrao" to "Padrão", "voz" to "Voz", "filme" to "Filme", "musica" to "Música", "esporte" to "Esporte", "noturno" to "Noturno")
 private val EQ_V = mapOf("padrao" to intArrayOf(0, 0, 0), "voz" to intArrayOf(-3, 4, 1), "filme" to intArrayOf(4, 0, 2), "musica" to intArrayOf(3, 0, 3), "esporte" to intArrayOf(1, 2, 3), "noturno" to intArrayOf(-4, 2, 0))
 val FITS = listOf("Original", "Preencher (sem faixas)", "Zoom 120%")
-val SHARP = linkedMapOf("suave" to "Suave", "media" to "Média", "forte" to "Forte", "max" to "Máxima")
 val PANELS = linkedMapOf("auto" to "Automático", "hva" to "HVA / VA (TCL)", "outro" to "IPS / OLED / outro")
-val AI_UP = linkedMapOf("auto" to "Auto (IA)", "1440" to "QHD", "1080" to "FHD", "off" to "Desligada")
+val AI_UP = linkedMapOf("auto" to "Ligada", "off" to "Desligada")
+val COLOR_STYLES = linkedMapOf("fiel" to "Fiel à realidade", "vivido" to "Vívido", "cinema" to "Cinema")
+val ONOFF = linkedMapOf("1" to "Ligada", "0" to "Desligada")
 val QUALITY = linkedMapOf("auto" to "Automática", "480" to "480p", "720" to "720p", "1080" to "1080p", "2160" to "2160p")
 
 /** Filtro de cor do vídeo: modo de imagem + brilho, contraste e cor + realce. */
@@ -202,7 +203,7 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
                     .build()
         }
         avDelay.targetMs = PP.avMs
-        player = ExoPlayer.Builder(ctx, rf).setMediaSourceFactory(msf).setLoadControl(load).setBandwidthMeter(Bandwidth.get(ctx)).build()
+        player = ExoPlayer.Builder(ctx, rf).setMediaSourceFactory(msf).setLoadControl(load).also { b -> if (PP.fullQuality) b.setBandwidthMeter(Bandwidth.get(ctx)) }.build()
         applyQuality()
     }
 
@@ -274,7 +275,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     var aiLabel by remember { mutableStateOf("") }
     var cmpOn by remember { mutableStateOf(false) }
     // estado da IA de imagem neste vídeo: cap = limite do disjuntor (2 Ultra, 1 Alta, 0 sem reforço)
-    val ai = remember { object { var key = ""; var cap = 2; var hadFx = false; var compare = false; var lost = 0L; var stable = 0; var tier = 0; var outH = 0; var hot = 0; var smoothOff = false; var bestOn = false; var buffered = false; val hist = LongArray(10); var idx = 0 } }
+    val ai = remember { object { var key = ""; var cap = 2; var hadFx = false; var compare = false; var lost = 0L; var stable = 0; var tier = 0; var outH = 0; var hot = 0; var bestOn = false; var buffered = false; val hist = LongArray(10); var idx = 0 } }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
@@ -313,30 +314,26 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         sv.setFractionalTextSize(when (PP.subSize) { 0 -> .045f; 2 -> .075f; else -> .058f })
     }
 
-    /** IA de imagem: decide pelo diagnóstico do aparelho e pelo disjuntor (Ultra 1440p, Alta 1080p ou modo leve). */
+    /** IA de imagem (só filmes e séries): nitidez leve + realce de cor por cena, na resolução do vídeo. Ao vivo vai direto. */
+    fun sceneTag() = if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else ""
     fun applyAi() {
-        SceneAi.on = !req.live && PP.aiUp != "off"
+        SceneAi.on = !req.live && PP.aiUp != "off" && ai.cap > 0
         val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live)
-        val smooth = PP.smooth && !ai.smoothOff && !req.live && player.videoFormat != null
-        aiLabel = plan.label + (if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else "") + if (smooth) (if (plan.label.isBlank()) "" else " · ") + "Movimento 60 Hz" else ""
+        aiLabel = plan.label + sceneTag()
         ai.tier = plan.tier; ai.outH = plan.outH
-        val key = plan.key + if (smooth) "+60" else ""
-        if (key == ai.key) return
-        ai.key = key
-        val fx = if (smooth) plan.effects + MotionSmooth() else plan.effects
+        if (plan.key == ai.key) return
+        ai.key = plan.key
+        val fx = plan.effects
         if (fx.isEmpty() && !ai.hadFx) return
-        try { player.setVideoEffects(fx); ai.hadFx = fx.isNotEmpty() || ai.hadFx } catch (e: Throwable) { ai.cap = 0; ai.smoothOff = true; aiLabel = "" }
+        try { player.setVideoEffects(fx); ai.hadFx = fx.isNotEmpty() || ai.hadFx } catch (e: Throwable) { ai.cap = 0; SceneAi.on = false; aiLabel = "" }
     }
 
-    fun applyAiLabel() {
-        val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live)
-        aiLabel = plan.label + (if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else "") + if (PP.smooth && !ai.smoothOff && !req.live) " · Movimento 60 Hz" else ""
-    }
+    fun applyAiLabel() { aiLabel = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live).label + sceneTag() }
 
     fun stepDown(why: String) {
         if (ai.cap <= 0 || ai.tier <= 0) return
         ai.cap = ai.tier - 1; ai.stable = 0; ai.hist.fill(0L); applyAi()
-        say(why + if (ai.cap == 1) ": IA desceu para 1080p" else ": reforço pausado neste vídeo")
+        say("$why: IA de imagem pausada neste vídeo")
     }
 
     /** Disjuntor (a cada 1 s): quadros perdidos em 10 s e temperatura do chip; sobe de novo após 60 s estável. */
@@ -347,7 +344,6 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         val old = ai.hist[ai.idx]; ai.hist[ai.idx] = now; ai.idx = (ai.idx + 1) % ai.hist.size
         ai.lost = if (old in 1..now) now - old else 0L
         if (!player.isPlaying) return
-        if (ai.lost > 24 && PP.smooth && !ai.smoothOff) { ai.smoothOff = true; ai.hist.fill(0L); ai.key = "-"; applyAi(); say("A TV estava perdendo quadros: Movimento 60 Hz pausado neste vídeo"); return }
         if (ai.tier > 0 && ai.lost > 24) { stepDown("A TV estava perdendo quadros"); return }
         if (Build.VERSION.SDK_INT >= 29) {
             val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
@@ -355,12 +351,11 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             if (ai.tier > 0 && ai.hot >= android.os.PowerManager.THERMAL_STATUS_MODERATE) { stepDown("O chip esquentou"); return }
         }
         if (ai.lost <= 2 && ai.hot < 2) ai.stable++ else ai.stable = 0
-        val top = if (PP.aiUp == "auto") ImageAi.maxTier() else 2
-        if (ai.stable >= 60 && ai.cap < top) { ai.cap++; ai.stable = 0; ai.hist.fill(0L); applyAi() }
-        // modo leve: sem reforço na placa, pede a melhor versão do canal quando a internet está firme por 20 s
-        if (ai.tier == 0 && PP.aiUp != "off") {
+        if (ai.stable >= 60 && ai.cap < 1 && PP.aiUp != "off") { ai.cap++; ai.stable = 0; ai.hist.fill(0L); applyAi() }
+        // qualidade cheia: pede a melhor versão do vídeo; se a internet engasgar, volta para o automático
+        if (PP.fullQuality || (ai.tier == 0 && PP.aiUp != "off")) {
             if (player.playbackState == Player.STATE_BUFFERING) { ai.buffered = true; if (ai.bestOn) { ai.bestOn = false; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(false).build() } }
-            else if (!ai.bestOn && !ai.buffered && ai.stable >= 20 && tracks.groups.count { it.type == MC.TRACK_TYPE_VIDEO && it.length > 1 } > 0) {
+            else if (!ai.bestOn && !ai.buffered && (ai.stable >= 20 || (PP.fullQuality && pos < 15000)) && tracks.groups.count { it.type == MC.TRACK_TYPE_VIDEO && it.length > 1 } > 0) {
                 ai.bestOn = true; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(true).build()
             }
         }
@@ -416,7 +411,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             override fun onCues(c: CueGroup) { (holder[2] as? SubtitleView)?.setCues(c.cues) }
             override fun onAudioSessionIdChanged(id: Int) { fx()?.release(); holder[3] = AudioFx(id).also { it.apply() } }
             override fun onPlayerError(e: PlaybackException) {
-                if (e.errorCode in 7000..7999 && (ai.cap > 0 || (PP.smooth && !ai.smoothOff))) { ai.cap = 0; ai.smoothOff = true; ai.key = ""; try { player.setVideoEffects(emptyList()) } catch (x: Throwable) {}; startAt = player.currentPosition; attempt++; say("Reforço de imagem desligado neste vídeo (a TV não aguentou)"); return }
+                if (e.errorCode in 7000..7999 && ai.cap > 0) { ai.cap = 0; SceneAi.on = false; ai.key = ""; try { player.setVideoEffects(emptyList()) } catch (x: Throwable) {}; startAt = player.currentPosition; attempt++; say("Reforço de imagem desligado neste vídeo (a TV não aguentou)"); return }
                 val bad = e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                 if (bad && !triedVlc) { triedVlc = true; eng.ok.setUserAgent(UA_VLC); startAt = player.currentPosition; attempt++; return }
                 if (req.live && !triedTs && url.contains(".m3u8") && req.ext == "ts") { triedTs = true; url = url.replace(".m3u8", ".ts"); attempt++; return }
@@ -600,10 +595,13 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                             Stepper("Contraste", PP.contrast, "") { d -> PP.contrast = (PP.contrast + d * 5).coerceIn(-50, 50) }
                             Stepper("Cor (saturação)", PP.sat, "") { d -> PP.sat = (PP.sat + d * 5).coerceIn(-50, 50) }
                         } else T("Escolha \"Personalizado\" para ajustar brilho, contraste e cor.", 11, C.dim)
-                        Opts("IA de imagem", AI_UP, PP.aiUp) { v -> PP.aiUp = v; ai.cap = 2; ai.key = "-"; applyAi(); say("IA de imagem: ${AI_UP[v]}") }
-                        Btn(if (cmpOn) "◐ Comparar: ligado (original | IA)" else "◐ Comparar: tela dividida", on = cmpOn, locked = false) { ai.compare = !ai.compare; cmpOn = ai.compare; ai.key = "-"; applyAi(); say(if (cmpOn) "Esquerda: original · Direita: com IA" else "Comparação desligada") }
-                        Opts("Intensidade da nitidez", SHARP, PP.sharpLevel) { v -> PP.sharpLevel = v; say("Nitidez: ${SHARP[v]}") }
-                        Opts("Suavizar movimento 60 Hz (experimental)", linkedMapOf("1" to "Ligado", "0" to "Desligado"), if (PP.smooth) "1" else "0") { v -> PP.smooth = v == "1"; ai.smoothOff = false; ai.key = "-"; applyAi(); say(if (PP.smooth) "Movimento 60 Hz ligado" else "Movimento 60 Hz desligado") }
+                        if (req.live) T("TV ao vivo: a imagem vai direto para a TV (IA e movimento da própria TV), para trocar de canal na hora. A IA do app atua em filmes e séries.", 11, C.dim, lineHeight = 15)
+                        else {
+                            Opts("IA de imagem", AI_UP, if (PP.aiUp == "off") "off" else "auto") { v -> PP.aiUp = v; ai.cap = 1; ai.key = "-"; applyAi(); say("IA de imagem: ${AI_UP[v]}") }
+                            Btn(if (cmpOn) "◐ Comparar: ligado (original | IA)" else "◐ Comparar: tela dividida", on = cmpOn, locked = false) { ai.compare = !ai.compare; cmpOn = ai.compare; ai.key = "-"; applyAi(); say(if (cmpOn) "Esquerda: original · Direita: com IA" else "Comparação desligada") }
+                            Opts("Estilo de cor", COLOR_STYLES, PP.colorStyle) { v -> PP.colorStyle = v; applyAiLabel(); say("Estilo: ${COLOR_STYLES[v]}") }
+                            Opts("Nitidez leve", ONOFF, if (PP.aiSharp) "1" else "0") { v -> PP.aiSharp = v == "1"; ai.key = "-"; applyAi(); say("Nitidez leve: ${ONOFF[v]}") }
+                        }
                         Opts("Painel da TV", PANELS, PP.panel) { v -> PP.panel = v; say("Painel: ${PANELS[v]}") }
                         val f = player.videoFormat
                         T(listOfNotNull(

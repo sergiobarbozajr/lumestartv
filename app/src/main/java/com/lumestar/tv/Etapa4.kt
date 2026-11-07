@@ -251,7 +251,7 @@ fun AssistantPage(st: AppState, locked: Boolean, compact: Boolean = false) {
         },
         "Melhorar a imagem para futebol" to {
             me("Melhorar a imagem para futebol")
-            PP.preset = "esporte"; PP.sharpLevel = "forte"; if (PP.aiUp == "off") PP.aiUp = "auto"; PP.matchHz = true
+            PP.preset = "esporte"; PP.aiSharp = true; if (PP.aiUp == "off") PP.aiUp = "auto"; PP.matchHz = true
             bot("Feito: modo de imagem Esporte (mais cor e contraste), nitidez Forte, IA de imagem ligada e a tela na mesma frequência do jogo (movimento mais liso). Para voltar, use o botão Imagem durante o vídeo.")
         },
         "O som está atrasado ou adiantado" to {
@@ -264,7 +264,7 @@ fun AssistantPage(st: AppState, locked: Boolean, compact: Boolean = false) {
             bot(if (r == null) "O diagnóstico ainda não rodou. Abra Configurações › IA de imagem e aperte \"Testar o aparelho de novo\"."
                 else listOf("Placa de vídeo: ${r.gpu}", "Reconstruir 1080p: " + (if (r.ms1080 < 99f) "%.1f ms por quadro".format(r.ms1080) else "não suportado"), "Reconstruir 1440p: " + (if (r.ms1440 < 99f) "%.1f ms por quadro".format(r.ms1440) else "não suportado"),
                     "IA no chip da TV: " + if (ImageAi.hwAi) "sim" else "não", "Painel: " + if (ImageAi.panelHva()) "HVA (VA)" else "outro",
-                    "Modo escolhido: " + listOf("Modo leve", "FHD", "QHD")[ImageAi.maxTier()]).joinToString("\n"))
+                    "IA de imagem: " + (if (PP.aiUp == "off") "desligada" else "ligada em filmes e séries (estilo ${COLOR_STYLES[PP.colorStyle]})")).joinToString("\n"))
         },
     )
 

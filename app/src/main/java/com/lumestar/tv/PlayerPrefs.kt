@@ -51,10 +51,15 @@ object PP {
     var enhance by StrP("realce", "auto")      // off | auto | baixa | media | alta | ultra
     var quality by StrP("qualidade", "auto")
     var aiUp by StrP("reforcoIa", "auto")      // auto | 1440 | 1080 | off
-    var matchHz by BoolP("frequenciaTela", true)
-    var smooth by BoolP("movimento60", false)     // experimental: cria quadros intermediários
+    var matchHz by BoolP("frequenciaTela", true)   // "Suavização 100 Hz": entrega a cadência certa para o MEMC da TV
+    var colorStyle by StrP("estiloCor", "fiel")    // fiel | vivido | cinema
+    var aiSkin by BoolP("iaPele", true)
+    var aiNature by BoolP("iaPaisagem", true)
+    var aiDepth by BoolP("iaProfundidade", true)
+    var aiFidelity by BoolP("iaFidelidade", true)
+    var aiSharp by BoolP("nitidezLeve", true)
+    var fullQuality by BoolP("qualidadeCheia", true)
     var avMs by IntP("sincroniaMs", 0)          // + atrasa o som, − adianta
-    var sharpLevel by StrP("nitidez", "forte")  // suave | media | forte | max
     var panel by StrP("painel", "auto")        // auto | hva | outro   // auto | 480 | 720 | 1080 | 2160
     // tela
     var fit by IntP("telaModo", 0)              // 0 original · 1 preencher · 2 zoom

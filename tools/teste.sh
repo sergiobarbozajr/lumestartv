@@ -74,6 +74,11 @@ key KEYCODE_DPAD_RIGHT 1.2
 key KEYCODE_DPAD_CENTER 3
 shot "serie_detalhe"
 key KEYCODE_BACK 1.5
+abre --es pagina filmes
+key KEYCODE_DPAD_RIGHT 1.2
+key KEYCODE_DPAD_CENTER 3
+shot "filme_detalhe"
+key KEYCODE_BACK 1.5
 abre --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
 sleep 5
 shot "reproduzindo_filme"
@@ -154,10 +159,10 @@ sleep 3; shot "tema_galaxia_inicio"
 abre --es pagina config
 key KEYCODE_DPAD_RIGHT 1
 sleep 1; shot "tema_galaxia_config"
-abre --ez movimento true --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
-sleep 5; shot "movimento60"
-adb logcat -d | grep -iE "VideoFrameProcessingException|FrameDoubler|Movimento" | tail -5 > teste/movimento.txt
-abre --ez movimento false --es tema cosmos --es pagina inicio
+abre --es abrir "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
+sleep 7; key KEYCODE_DPAD_CENTER 1; shot "filme_ia_cena"
+adb logcat -d | grep -iE "VideoFrameProcessingException|AiSharpen|GlUtil" | tail -5 > teste/ia_cena.txt
+abre --es tema cosmos --es pagina inicio
 
 # ---- versão de celular (toque) ----
 adb shell settings put system accelerometer_rotation 0

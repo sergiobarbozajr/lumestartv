@@ -50,39 +50,34 @@ object ImageAi {
      * mode: "auto" (a IA decide), "1440", "1080" ou "off". cap: limite do disjuntor neste vídeo.
      * compare: o botão Comparar está mostrando o original.
      */
-    /** Intensidade da nitidez: (força do CAS, reforço de detalhe). */
-    fun level(): Pair<Float, Float> = when (PP.sharpLevel) { "suave" -> 0.35f to 0f; "media" -> 0.6f to 0.25f; "max" -> 1f to 0.85f; else -> 0.85f to 0.5f }
 
     /** Painel HVA (VA) da TCL: escolhido sozinho em TVs TCL quando o perfil está em Automático. */
     val tclPanel: Boolean by lazy { (android.os.Build.MANUFACTURER + " " + android.os.Build.BRAND).lowercase().contains("tcl") }
     fun panelHva(): Boolean = when (PP.panel) { "hva" -> true; "outro" -> false; else -> tclPanel }
 
     /**
-     * mode: "auto" (a IA decide), "1440", "1080" ou "off". cap: limite do disjuntor neste vídeo.
-     * compare: tela dividida (esquerda original, direita com IA).
+     * mode: "off" desliga; qualquer outro valor liga. cap: disjuntor (0 = pausada neste vídeo).
+     * compare: tela dividida (esquerda original, direita com IA). live: TV ao vivo vai direto, sem IA.
      */
     fun plan(mode: String, f: Format?, cap: Int, compare: Boolean, live: Boolean = false): Plan {
-        val (sh, dt) = level(); val pn = if (panelHva()) 1f else 0f; val sp = if (compare) 0.5f else 0f
-        fun fx(target: Int, lite: Boolean, tone: Float) = listOf(AiSharpen(target, sh, tone, lite, dt, sp, pn))
-        val h = f?.height ?: 0; val w = f?.width ?: 0
+        val pn = if (panelHva()) 1f else 0f; val sp = if (compare) 0.5f else 0f
+        val h = f?.height ?: 0
         val hdr = f?.colorInfo?.let { it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 || it.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG } ?: false
         if (hdr) return Plan("hdr", emptyList(), if (hwAi) "IA da TV · HDR" else "HDR original", 0, 0)
         if (h <= 0) return Plan("wait", emptyList(), "", 0, 0)
         if (live) return Plan("live", emptyList(), if (hwAi) "Direto · IA da TV" else "Direto", 0, h)
-        val tag = (if (compare) "c" else "") + PP.sharpLevel + pn
-        if (mode == "off") return if (compare) Plan("off$tag", fx(0, true, 0.4f), "Comparando: original | IA", 0, h) else Plan("off", emptyList(), "", 0, 0)
-        val want = when (mode) { "1440" -> 2; "1080" -> 1; else -> maxTier() }
-        val tier = minOf(want, cap, if (mode == "auto") maxTier() else 2)
+        // Na TV: sem ampliação (upscale pesado fica para a versão de PC). A IA trabalha na resolução do vídeo:
+        // nitidez leve + realce de cor por cena; o chip da TV cuida da escala e do movimento (MEMC).
+        val sharp = if (PP.aiSharp) 0.4f else 0f
+        val depth = if (PP.aiDepth) 0.3f else 0f
+        val tag = (if (compare) "c" else "") + sharp + depth + pn
+        fun fxNative() = listOf(AiSharpen(0, sharp, 0.3f, true, depth, sp, pn))
+        if (mode == "off") return if (compare) Plan("off$tag", fxNative(), "Comparando: original | IA", 0, h) else Plan("off", emptyList(), "", 0, 0)
         val src = "${h}p"
         val chipTv = if (hwAi) " + IA da TV" else ""
-        val p = when {
-            tier >= 2 && h < 1400 -> Plan("u1440$tag", fx(1440, true, 0.45f), "IA $src→QHD$chipTv", 2, 1440)
-            tier >= 1 && h < 900 && w < 1600 -> Plan("u1080$tag", fx(1080, false, 0.5f), "IA $src→FHD$chipTv", 1, 1080)
-            tier >= 1 && h <= 1100 -> Plan("sharp$tag", fx(0, true, 0.4f), "IA · nitidez $src$chipTv", 1, h)
-            (GpuProbe.result?.msLite ?: 99f) < 14f -> Plan("lite$tag", fx(0, true, 0.35f), "IA leve · nitidez $src$chipTv", 0, h)
-            hwAi -> Plan("pass", emptyList(), "IA da TV · 4K", 0, h)
-            else -> Plan("none", emptyList(), "Modo leve", 0, h)
-        }
+        val style = when (PP.colorStyle) { "vivido" -> "Vívido"; "cinema" -> "Cinema"; else -> "Fiel" }
+        val p = if (cap <= 0) Plan("none", emptyList(), "IA pausada (TV no limite)$chipTv", 0, h)
+        else Plan("scene$tag", fxNative(), "IA $style · $src$chipTv", 1, h)
         return if (compare && p.effects.isEmpty()) Plan("cmp$tag", fx(0, true, 0.4f), "Comparando: original | IA", p.tier, h)
         else if (compare) Plan(p.key, p.effects, "Comparando: original | " + p.label, p.tier, p.outH) else p
     }
@@ -209,6 +204,8 @@ private class AiSharpenProgram(useHdr: Boolean, private val targetHeight: Int, p
             program.setFloatUniform("uVib", SceneAi.vib)
             program.setFloatUniform("uSkin", SceneAi.skin)
             program.setFloatUniform("uShadow", SceneAi.shadow)
+            program.setFloatUniform("uWarm", SceneAi.warm)
+            program.setFloatUniform("uCurve", SceneAi.curve)
             program.setFloatUniform("uTone", tone)
             program.bindAttributesAndUniforms()
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -249,6 +246,8 @@ uniform float uPanel;
 uniform float uVib;
 uniform float uSkin;
 uniform float uShadow;
+uniform float uWarm;
+uniform float uCurve;
 varying vec2 vTexSamplingCoord;
 
 vec3 tx(vec2 p) { return texture2D(uTexSampler, p).rgb; }
@@ -306,6 +305,10 @@ void main() {
   float vib = uVib * (1.0 - sat) * (1.0 - skin * uSkin);
   o = mix(vec3(lu), o, 1.0 + vib);
   o += uShadow * 0.06 * (1.0 - smoothstep(0.0, 0.3, lu)); // cena escura: abre as sombras sem lavar os pretos
+  // estilo de cor: Vívido e Cinema dão mais contraste no meio; Cinema esquenta as luzes e esfria as sombras (sem mexer na pele)
+  vec3 sc2 = o * o * (3.0 - 2.0 * o);
+  o = mix(o, sc2, uCurve * (1.0 - skin * 0.6));
+  o += uWarm * (vec3(0.022, 0.006, -0.02) * smoothstep(0.45, 1.0, lu) + vec3(-0.012, 0.0, 0.016) * (1.0 - smoothstep(0.0, 0.4, lu))) * (1.0 - skin);
   if (uPanel > 0.5) o = o * 0.975 + 0.025 * (1.0 - smoothstep(0.0, 0.25, o));
   vec3 res = clamp(o, 0.0, 1.0);
   if (uSplit > 0.0) {
@@ -347,12 +350,14 @@ object SceneAi {
     @Volatile var vib = 0f
     @Volatile var skin = 1f
     @Volatile var shadow = 0f
+    @Volatile var warm = 0f
+    @Volatile var curve = 0f
     @Volatile var on = false
     var scene = ""
         private set
     private var tVib = 0f; private var tSkin = 1f; private var tShadow = 0f
 
-    fun reset(enabled: Boolean) { on = enabled; vib = 0f; skin = 1f; shadow = 0f; tVib = if (enabled) .22f else 0f; tSkin = 1f; tShadow = 0f; scene = "" }
+    fun reset(enabled: Boolean) { on = enabled; vib = 0f; skin = 1f; shadow = 0f; warm = 0f; curve = 0f; tVib = if (enabled) .22f else 0f; tSkin = 1f; tShadow = 0f; scene = "" }
 
     fun analyze(b: android.graphics.Bitmap) {
         if (!on) return
@@ -378,17 +383,24 @@ object SceneAi {
         val fSkin = skinN.toFloat() / n; val fNat = (green + sky).toFloat() / n; val l = lum / n; val s = satSum / n
         // cores já muito vivas (desenho animado, show) recebem menos realce, para não estourar
         val tame = if (s > .55f) .5f else 1f
+        val pessoas = PP.aiSkin && fSkin > .10f
+        val natureza = PP.aiNature && fNat > .25f
         when {
-            l < .22f -> { scene = "Cena escura"; tVib = .15f * tame; tSkin = 1f; tShadow = 1f }
-            fSkin > .10f -> { scene = "Pessoas"; tVib = .18f * tame; tSkin = 1f; tShadow = .3f }
-            fNat > .25f -> { scene = "Paisagem"; tVib = .38f * tame; tSkin = .6f; tShadow = .2f }
-            else -> { scene = "Ambiente"; tVib = .26f * tame; tSkin = .9f; tShadow = .25f }
+            l < .22f -> { scene = "Cena escura"; tVib = .15f; tSkin = 1f; tShadow = 1f }
+            pessoas -> { scene = "Pessoas"; tVib = .18f; tSkin = 1f; tShadow = .3f }
+            natureza -> { scene = "Paisagem"; tVib = .38f; tSkin = .6f; tShadow = .2f }
+            else -> { scene = "Ambiente"; tVib = .26f; tSkin = .9f; tShadow = .25f }
         }
+        if (!PP.aiSkin) tSkin = 0f
+        tVib *= tame * when (PP.colorStyle) { "vivido" -> 1.6f; "cinema" -> .8f; else -> 1f }
+        if (PP.aiFidelity) tVib = minOf(tVib, .3f) // trava: cores vivas, porém reais
     }
 
     /** Chamado a cada 0,5 s: aproxima os valores do alvo devagar (troca suave em ~2 s). */
     fun step() {
-        if (!on) { vib = 0f; shadow = 0f; return }
+        if (!on) { vib = 0f; shadow = 0f; warm = 0f; curve = 0f; return }
         vib += (tVib - vib) * .25f; skin += (tSkin - skin) * .25f; shadow += (tShadow - shadow) * .25f
+        val (w, c) = when (PP.colorStyle) { "vivido" -> 0f to .15f; "cinema" -> 1f to .3f; else -> 0f to 0f }
+        warm += (w - warm) * .25f; curve += (c - curve) * .25f
     }
 }

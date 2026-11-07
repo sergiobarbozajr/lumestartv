@@ -3,6 +3,8 @@ package com.lumestar.tv
 import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -54,30 +59,75 @@ fun TmdbPanel(st: AppState, locked: Boolean) {
 }
 
 // ---------------- IA de imagem ----------------
+/** Linha com título, explicação e interruptor (como na maquete). A linha inteira recebe o foco do controle. */
+@Composable
+fun TogRow(title: String, desc: String, on: Boolean, locked: Boolean, enabled: Boolean = true, onToggle: (Boolean) -> Unit) {
+    var f by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (f) C.panel2 else C.panel)
+            .border(1.dp, if (f) C.a1 else C.line, RoundedCornerShape(12.dp))
+            .focusProperties { canFocus = !locked }
+            .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); f = n }
+            .clickable(remember { MutableInteractionSource() }, null) { if (enabled) { Sfx.ok(); onToggle(!on) } }
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            T(title, 13, if (enabled) C.fg else C.muted, FontWeight.Bold)
+            T(desc, 11, C.muted, lineHeight = 15)
+        }
+        val green = Color(0xFF54E6A8)
+        Box(Modifier.width(44.dp).height(26.dp).clip(RoundedCornerShape(50)).background(if (on) green else C.line).padding(3.dp), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
+            Box(Modifier.width(20.dp).height(20.dp).clip(RoundedCornerShape(50)).background(Color.White))
+        }
+    }
+}
+
+@Composable
+private fun AiBlock(title: String, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.bg.copy(alpha = .6f)).border(1.dp, C.line, RoundedCornerShape(14.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        T(title, 14, C.fg, FontWeight.Bold)
+        content()
+    }
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun AiImagePanel(st: AppState, locked: Boolean) {
     PP.rev.let { }
-    T("Filmes e séries: a IA reconhece a cena (pessoas, paisagem, ambiente, cena escura) e realça nitidez e cores vivas e fiéis, mantendo o tom de pele natural. TV ao vivo: o vídeo vai direto para a TV (IA e movimento da própria TV), para trocar de canal na hora e em qualidade cheia.", 13, C.muted, lineHeight = 19)
-    Opts("IA de imagem", AI_UP, PP.aiUp, locked) { PP.aiUp = it }
-    val r = GpuProbe.result
-    val tierName = listOf("Modo leve", "FHD", "QHD")
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0x24B08CFF)).border(1.dp, Color(0x66B08CFF), RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+        T("✦ Aplicado só a Filmes e Séries", 12, Color(0xFFD7C6FF), FontWeight.SemiBold)
+    }
+    T("A IA observa a cena e ajusta a cor na hora: identifica pessoas, paisagem, objetos e ambiente, e realça com cores vivas mantendo os tons reais. A análise usa uma amostra pequena da imagem a cada 2 segundos, somada ao hardware da TV, por isso é instantânea. A TV ao vivo vai direto para a TV, leve e com troca de canal na hora.", 13, C.muted, lineHeight = 19)
+    Opts("IA de imagem", AI_UP, if (PP.aiUp == "off") "off" else "auto", locked) { PP.aiUp = it }
     KV(listOf(
-        "Diagnóstico" to if (GpuProbe.running) "testando…" else if (r == null) "ainda não feito" else "feito",
-        "Placa de vídeo" to (r?.gpu?.take(34) ?: "—"),
-        "Reconstruir 1080p" to (r?.let { if (it.ms1080 < 99f) "%.1f ms por quadro".format(it.ms1080) else "não suportado" } ?: "—"),
-        "Reconstruir 1440p" to (r?.let { if (it.ms1440 < 99f) "%.1f ms por quadro".format(it.ms1440) else "não suportado" } ?: "—"),
+        "Cena detectada agora" to if (SceneAi.on && SceneAi.scene.isNotBlank()) SceneAi.scene else "abra um filme ou série",
         "IA no chip da TV" to if (ImageAi.hwAi) "sim (${ImageAi.chip})" else "não encontrada",
-        "Melhor para este aparelho" to tierName[ImageAi.maxTier()] + if (ImageAi.maxTier() == 0 && ImageAi.hwAi) " + IA da TV" else "",
     ))
-    Btn(if (GpuProbe.running) "Testando…" else "Testar o aparelho de novo", locked = locked) { GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) { st.say("Diagnóstico pronto: " + tierName[ImageAi.maxTier()]) } }
-    T("Automática: a IA testa este aparelho e usa o máximo que ele aguenta. Vídeos abaixo do alvo são reconstruídos na placa de vídeo (os pixels que faltam são recriados a partir dos vizinhos, com nitidez adaptativa). Durante o vídeo, se a TV perder quadros ou o chip esquentar, ela desce de 1440p para 1080p ou para o modo leve, e sobe de novo depois de 1 minuto estável. No modo leve, ela pede a melhor versão do canal quando a internet está firme e deixa a IA do chip da TV fazer o 4K.", 11, C.dim, lineHeight = 15)
-    Opts("Intensidade da nitidez", SHARP, PP.sharpLevel, locked) { PP.sharpLevel = it }
+    AiBlock("✦ Realce inteligente de cor") {
+        Opts("Estilo de cor", COLOR_STYLES, PP.colorStyle, locked) { PP.colorStyle = it }
+        TogRow("Tom de pele natural", "Reconhece pele e mantém o tom realista, sem deixar alaranjado nem pálido.", PP.aiSkin, locked) { PP.aiSkin = it }
+        TogRow("Paisagem e natureza", "Realça o verde das matas e o azul do céu e do mar, sem exagero artificial.", PP.aiNature, locked) { PP.aiNature = it }
+        TogRow("Objetos e profundidade", "Reforça o contorno e o relevo dos objetos, dando mais nitidez à cena.", PP.aiDepth, locked) { PP.aiDepth = it }
+        TogRow("Fidelidade de cor", "Trava o realce para nunca estourar as cores: vivas, porém reais.", PP.aiFidelity, locked) { PP.aiFidelity = it }
+    }
+    AiBlock("Movimento e nitidez") {
+        TogRow("Suavização 100 Hz", "O movimento fluido é feito pelo recurso de imagem da própria TV (MEMC). O app ajusta a frequência da tela ao vídeo para o MEMC trabalhar sem trancos. Ative \"Movimento/MEMC\" nos ajustes de imagem da TV.", PP.matchHz, locked) { PP.matchHz = it }
+        Btn("Abrir ajustes de imagem da TV", locked = locked) {
+            val ok = listOf(android.provider.Settings.ACTION_DISPLAY_SETTINGS, android.provider.Settings.ACTION_SETTINGS).any { a ->
+                try { ctx.startActivity(android.content.Intent(a).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (e: Exception) { false }
+            }
+            if (!ok) st.say("Use o botão de configurações do controle: Imagem › Movimento")
+        }
+        TogRow("Nitidez leve", "Realça os detalhes de cada quadro na hora, sem atraso perceptível.", PP.aiSharp, locked) { PP.aiSharp = it }
+        TogRow("Qualidade cheia na troca", "Abre filmes, episódios e canais já na maior resolução, acabando com o embaçado inicial. Se a internet engasgar, baixa sozinho.", PP.fullQuality, locked) { PP.fullQuality = it }
+    }
+    AiBlock("Reservado para a versão de PC") {
+        TogRow("IA pesada — upscale até 1440p + criação de quadros", "Precisa de placa de vídeo dedicada (como a RTX 3070). No aparelho de TV fica desligada para não travar.", false, locked, enabled = false) { }
+    }
     Opts("Painel da TV", PANELS, PP.panel, locked) { PP.panel = it }
-    T("HVA é o painel VA da TCL: pretos profundos e alto contraste. Nesse perfil a IA segura a nitidez nas sombras (evita halos) e sobe de leve o quase-preto, o que reduz o rastro em cenas escuras. Automático usa HVA em TVs TCL" + if (ImageAi.tclPanel) " (esta é uma TCL)." else ".", 11, C.dim, lineHeight = 15)
-    Opts("Suavizar movimento 60 Hz (experimental)", linkedMapOf("1" to "Ligado", "0" to "Desligado"), if (PP.smooth) "1" else "0", locked) { PP.smooth = it == "1" }
-    T("Cria um quadro intermediário entre cada par de quadros: 24→48, 25→50, 30→60 quadros por segundo. Movimento mais liso em futebol e câmera andando. Não é igual ao MEMC da TV: em movimentos muito rápidos pode aparecer um leve rastro. Desliga sozinho se a TV perder quadros.", 11, C.dim, lineHeight = 15)
-    Opts("Frequência da tela igual à do vídeo", linkedMapOf("1" to "Ligada", "0" to "Desligada"), if (PP.matchHz) "1" else "0", locked) { PP.matchHz = it == "1" }
+    T("HVA é o painel VA da TCL: pretos profundos e alto contraste. Nesse perfil a IA segura a nitidez nas sombras (evita halos) e sobe de leve o quase-preto. Automático usa HVA em TVs TCL" + if (ImageAi.tclPanel) " (esta é uma TCL)." else ".", 11, C.dim, lineHeight = 15)
     Opts("Realce de cor e contraste", ENHANCE, PP.enhance, locked) { PP.enhance = it }
     Opts("Modo de imagem", PRESETS, PP.preset, locked) { PP.preset = it }
     if (PP.preset == "pers") {

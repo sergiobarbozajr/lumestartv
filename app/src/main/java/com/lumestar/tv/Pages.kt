@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -39,6 +41,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -227,9 +230,24 @@ fun SearchPage(st: AppState, locked: Boolean) {
 }
 
 // ---------------- detalhes de filme e série ----------------
+/** Abre o trailer no YouTube (app da TV); sem trailer no TMDB, abre a busca do YouTube pelo título. */
+fun openTrailer(ctx: android.content.Context, title: String, year: Int, key: String?): Boolean {
+    val tries = if (!key.isNullOrBlank()) listOf("vnd.youtube:$key", "https://www.youtube.com/watch?v=$key")
+    else listOf("https://www.youtube.com/results?search_query=" + android.net.Uri.encode("$title ${if (year > 0) year else ""} trailer oficial".replace("  ", " ")))
+    for (u in tries) try {
+        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); return true
+    } catch (e: Exception) {}
+    return false
+}
+
+/** Rótulo do selo de IA na tela de detalhe e no player (só filmes e séries). */
+fun aiBadge(): String = if (PP.aiUp == "off") "" else "✦ IA de Imagem ativa — " + when (PP.colorStyle) { "vivido" -> "cores vivas"; "cinema" -> "estilo cinema"; else -> "cores fiéis" } + if (PP.aiSkin) " e tons de pele reais" else ""
+
+/** Tela de detalhe (como na maquete): fundo do filme, capa grande, sinopse e Assistir · Minha Lista · Trailer. */
 @Composable
 fun DetailDialog(st: AppState, it: Item) {
     val locked = st.kb != null || st.player != null
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var eps by remember(it.id) { mutableStateOf<List<Episode>?>(if (it.kind == SERIES) null else emptyList()) }
     var season by remember(it.id) { mutableIntStateOf(-1) }
     val playBtn = remember { FocusRequester() }
@@ -243,39 +261,56 @@ fun DetailDialog(st: AppState, it: Item) {
     Tmdb.rev.let { }
     val tm = Tmdb.meta(it)
     LaunchedEffect(tm) { tm?.let { m -> Tmdb.details(m) {} } }
-    Box(Modifier.fillMaxSize().background(Color(0xD902040C)), contentAlignment = Alignment.Center) {
-        Row(
-            Modifier.width(820.dp).height(440.dp).clip(RoundedCornerShape(20.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(20.dp)).padding(22.dp).focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(22.dp)
-        ) {
-            Box(Modifier.width(170.dp).height(255.dp).clip(RoundedCornerShape(12.dp)).background(coverBrush(it.title))) {
-                Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.Bottom) { T(it.title, 14, Color.White, FontWeight.Bold) }
-                Img(Tmdb.poster(it).ifBlank { it.logo }, 340, 510, Modifier.fillMaxSize())
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                T((if (it.kind == SERIES) "SÉRIE" else "FILME") + if (it.group.isNotBlank()) " · " + it.group.uppercase() else "", 10, C.a1, FontWeight.Bold, maxLines = 1)
-                T(it.title, 24, C.fg, FontWeight.ExtraBold, maxLines = 2, lineHeight = 28)
-                val yr = if (it.year > 0) it.year else tm?.year ?: 0
-                val rate = if (it.rating.isNotBlank() && it.rating != "0") "★ ${it.rating}" else if ((tm?.vote ?: 0.0) > 0) "★ %.1f".format(tm!!.vote) else ""
-                val meta = listOf(if (yr > 0) yr.toString() else "", tm?.cert?.takeIf { c -> c.isNotBlank() }?.let { c -> if (c == "L") "Livre" else "$c anos" } ?: "", rate, if ((tm?.runtime ?: 0) > 0) "${tm!!.runtime} min" else "", tm?.genres?.takeIf { g -> g != "—" } ?: "", if (Store.seen.contains(it.id)) "✓ Visto" else "").filter { s -> s.isNotBlank() }
-                if (meta.isNotEmpty()) T(meta.joinToString(" · "), 12, C.muted, FontWeight.SemiBold, maxLines = 1)
-                val plot = it.plot.ifBlank { tm?.overview ?: "" }
-                if (plot.isNotBlank()) T(plot, 13, Color(0xFFC9D1F3), maxLines = if (it.kind == SERIES) 3 else 6, lineHeight = 19)
-                if (!tm?.cast.isNullOrBlank()) T("Elenco: " + tm!!.cast, 11, C.muted, maxLines = 1)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (it.kind != SERIES) {
-                        Box(Modifier.focusRequester(playBtn)) {
-                            Btn(if (p != null) "▶ Continuar" else "▶ Assistir", locked = locked, primary = true) { st.play(PlayReq(it.id, it.title, it.url, false, p?.pos ?: 0L, it.group, it.ext)) }
-                        }
-                        if (p != null) Btn("Do início", locked = locked) { st.play(PlayReq(it.id, it.title, it.url, false, 0L, it.group, it.ext)) }
-                    }
-                    Box(if (it.kind == SERIES) Modifier.focusRequester(playBtn) else Modifier) {
-                        Btn(if (fav) "♥ Na Minha lista" else "♡ Minha lista", locked = locked) { val on = Store.toggleFav(it.id); st.say(if (on) "♥ Adicionado à Minha lista" else "Removido da Minha lista") }
-                    }
-                    if (p != null || Store.seen.contains(it.id)) Btn("Tirar do histórico", locked = locked) { Store.forget(it.id); st.say("\"${it.title}\" saiu do Visto e do Continuar assistindo") }
-                    Btn("Voltar", locked = locked) { st.detail = null; st.refocus++ }
+    val yr = if (it.year > 0) it.year else tm?.year ?: 0
+    Box(Modifier.fillMaxSize().background(C.bg)) {
+        // fundo: imagem do filme esmaecida, escurecendo para a esquerda e para baixo
+        Box(Modifier.fillMaxSize().background(coverBrush(it.title)).graphicsLayer { alpha = .55f }) {
+            Img(tm?.backdropUrl(1280) ?: "", 1280, 720, Modifier.fillMaxSize())
+        }
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xF504050C), .58f to Color(0x8C04050C), 1f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(.35f to Color.Transparent, 1f to Color(0xE604050C))))
+        Column(Modifier.fillMaxSize().padding(horizontal = 30.dp, vertical = 22.dp).focusGroup(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Btn("‹ Voltar", locked = locked) { st.detail = null; st.refocus++ }
+            Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Box(Modifier.width(160.dp).height(240.dp).clip(RoundedCornerShape(14.dp)).background(coverBrush(it.title)).border(1.dp, C.line, RoundedCornerShape(14.dp))) {
+                    Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.Bottom) { T(it.title, 14, Color.White, FontWeight.Bold) }
+                    Img(Tmdb.poster(it).ifBlank { it.logo }, 342, 513, Modifier.fillMaxSize())
                 }
-                if (it.kind == SERIES) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    T((if (it.kind == SERIES) "SÉRIE" else "FILME") + if (it.group.isNotBlank()) " · " + it.group.uppercase() else "", 10, C.a1, FontWeight.Bold, maxLines = 1)
+                    T(it.title, 32, C.fg, FontWeight.ExtraBold, maxLines = 2, lineHeight = 34)
+                    val rate = if (it.rating.isNotBlank() && it.rating != "0") "★ ${it.rating}" else if ((tm?.vote ?: 0.0) > 0) "★ %.1f".format(tm!!.vote) else ""
+                    val rt = tm?.runtime ?: 0
+                    val dur = if (rt <= 0) "" else if (it.kind == SERIES) "$rt min por episódio" else if (rt >= 60) "${rt / 60}h ${"%02d".format(rt % 60)}min" else "$rt min"
+                    val meta = listOf(if (yr > 0) yr.toString() else "", dur, tm?.genres?.takeIf { g -> g != "—" }?.split(", ")?.take(2)?.joinToString(", ") ?: "",
+                        tm?.cert?.takeIf { c -> c.isNotBlank() }?.let { c -> if (c == "L") "Livre" else "$c anos" } ?: "", if (Store.seen.contains(it.id)) "✓ Visto" else "").filter { s -> s.isNotBlank() }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (meta.isNotEmpty()) T(meta.joinToString("  •  "), 12, C.muted, FontWeight.SemiBold, maxLines = 1)
+                        if (rate.isNotBlank()) T(rate, 12, Color(0xFFFFD579), FontWeight.Bold)
+                    }
+                    val plot = it.plot.ifBlank { tm?.overview ?: "" }
+                    if (plot.isNotBlank()) T(plot, 13, Color(0xFFCDD6F5), maxLines = if (it.kind == SERIES) 3 else 5, lineHeight = 20, modifier = Modifier.widthIn(max = 560.dp))
+                    if (!tm?.cast.isNullOrBlank() && it.kind != SERIES) T("Elenco: " + tm!!.cast, 11, C.muted, maxLines = 1, modifier = Modifier.widthIn(max = 560.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (it.kind != SERIES) {
+                            Box(Modifier.focusRequester(playBtn)) {
+                                Btn(if (p != null) "▶ Continuar" else "▶ Assistir", locked = locked, primary = true) { st.play(PlayReq(it.id, it.title, it.url, false, p?.pos ?: 0L, it.group, it.ext)) }
+                            }
+                            if (p != null) Btn("Do início", locked = locked) { st.play(PlayReq(it.id, it.title, it.url, false, 0L, it.group, it.ext)) }
+                        }
+                        Box(if (it.kind == SERIES) Modifier.focusRequester(playBtn) else Modifier) {
+                            Btn(if (fav) "✓ Na Minha Lista" else "+ Minha Lista", on = fav, locked = locked) { val on = Store.toggleFav(it.id); st.say(if (on) "Adicionado à Minha Lista" else "Removido da Minha Lista") }
+                        }
+                        Btn("Trailer", locked = locked) { if (!openTrailer(ctx, it.title, yr, tm?.trailer)) st.say("Instale o YouTube na TV para ver trailers") }
+                        if (p != null || Store.seen.contains(it.id)) Btn("Tirar do histórico", locked = locked) { Store.forget(it.id); st.say("\"${it.title}\" saiu do Visto e do Continuar assistindo") }
+                    }
+                    val badge = aiBadge()
+                    if (badge.isNotBlank()) Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0x24B08CFF)).border(1.dp, Color(0x66B08CFF), RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+                        T(badge, 11, Color(0xFFD7C6FF), FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+                if (it.kind == SERIES) Column(Modifier.width(330.dp).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(C.panel.copy(alpha = .82f)).border(1.dp, C.line, RoundedCornerShape(14.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    T("EPISÓDIOS", 10, C.a1, FontWeight.Bold)
                     val l = eps
                     when {
                         l == null -> T("Carregando episódios…", 12, C.muted)
