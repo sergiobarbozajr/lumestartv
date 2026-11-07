@@ -1,0 +1,2 @@
+celular: enviado
+tema anime: recebido

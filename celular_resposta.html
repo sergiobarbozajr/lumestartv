@@ -1,0 +1,22 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LumeStarTV · enviar pelo celular</title><style>
+body{margin:0;font-family:system-ui,sans-serif;background:#050816;color:#eef2ff;padding:20px}
+h1{font-size:22px;margin:0 0 4px}p{color:#9aa6d6;margin:0 0 18px}
+form{background:#0e1538;border:1px solid #243069;border-radius:16px;padding:16px;margin-bottom:18px;display:flex;flex-direction:column;gap:10px}
+h2{font-size:16px;margin:0}input{font-size:16px;padding:12px;border-radius:10px;border:1px solid #243069;background:#050816;color:#eef2ff}
+button{font-size:16px;font-weight:700;padding:12px;border:0;border-radius:10px;background:linear-gradient(90deg,#5aa8ff,#b48cff);color:#050816}
+.ok{color:#52d6a8;font-weight:700}.err{color:#ff6f8e;font-weight:700}</style></head><body>
+<h1>LumeStarTV</h1><p>Envie para a TV sem digitar no controle.</p><p class=ok>Enviado! Confira na TV.</p>
+<form method="post"><h2>Lista (M3U, M3U8, JSON ou TXT)</h2><input type="hidden" name="tipo" value="lista">
+<input name="nome" placeholder="Nome (ex.: Minha lista)"><input name="url" type="url" placeholder="Endereço da lista (http://…)" required>
+<button>Enviar lista para a TV</button></form>
+<form method="post"><h2>Conta IPTV (Xtream)</h2><input type="hidden" name="tipo" value="conta">
+<input name="nome" placeholder="Nome da conta"><input name="servidor" placeholder="URL do servidor (ex.: http://servidor.com:8080)" required>
+<input name="usuario" placeholder="Usuário" required autocapitalize="off"><input name="senha" type="password" placeholder="Senha" required>
+<button>Enviar conta para a TV</button></form>
+<form method="post"><h2>Chave do TMDB (capas e sinopses)</h2><input type="hidden" name="tipo" value="tmdb">
+<input name="chave" placeholder="Chave da API do TMDB" required autocapitalize="off" autocomplete="off" spellcheck="false">
+<button>Enviar chave para a TV</button></form>
+<form method="post" enctype="multipart/form-data"><h2>Imagem do tema Anime</h2>
+<input type="file" name="imagem" accept="image/*" required>
+<button>Enviar imagem para a TV</button></form></body></html>

@@ -1,0 +1,10 @@
+== Navegacao pelo controle (GPU simulada do emulador) ==
+Total frames rendered: 104
+Janky frames: 76 (73.08%)
+50th percentile: 19ms
+90th percentile: 150ms
+99th percentile: 800ms
+celular: enviado
+tema anime: recebido
+11-07 03:01:00.612  5344  5344 I LumeStar: enviar pelo celular: ouvindo na porta 8765
+11-07 03:02:05.590  5985  5985 I LumeStar: enviar pelo celular: ouvindo na porta 8765
