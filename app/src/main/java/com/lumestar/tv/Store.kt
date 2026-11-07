@@ -34,8 +34,9 @@ object Secret {
     private val legacy get() = Build.VERSION.SDK_INT < 23
 
     @Synchronized
-    private fun key(): SecretKey = cached ?: (if (legacy) keyLegacy() else keyModern()).also { cached = it }
+    private fun key(): SecretKey = cached ?: (if (Build.VERSION.SDK_INT < 23) keyLegacy() else keyModern()).also { cached = it }
 
+    @androidx.annotation.RequiresApi(23)
     private fun keyModern(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
