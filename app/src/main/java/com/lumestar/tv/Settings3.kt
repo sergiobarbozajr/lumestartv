@@ -214,7 +214,12 @@ fun NetPanel(st: AppState, locked: Boolean) {
 
 fun netInfo(ctx: Context): List<Pair<String, String>> {
     val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val n = cm.activeNetwork ?: return listOf("Conexão" to "Sem internet")
+    // activeNetwork só existe no Android 6+; antes disso, acha a rede ativa pela lista de redes
+    val n = (if (android.os.Build.VERSION.SDK_INT >= 23) cm.activeNetwork else {
+        @Suppress("DEPRECATION") val ai = cm.activeNetworkInfo
+        @Suppress("DEPRECATION")
+        if (ai == null || !ai.isConnected) null else cm.allNetworks.firstOrNull { cm.getNetworkInfo(it)?.type == ai.type }
+    }) ?: return listOf("Conexão" to "Sem internet")
     val cap = cm.getNetworkCapabilities(n)
     val lp = cm.getLinkProperties(n)
     val kind = when {

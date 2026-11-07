@@ -297,7 +297,9 @@ object NewsFeed {
     }
 
     private fun clean(html: String): String =
-        android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_LEGACY).toString().replace(Regex("[\\uFFFC\\s]+"), " ").trim()
+        (if (android.os.Build.VERSION.SDK_INT >= 24) android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_LEGACY)
+         else @Suppress("DEPRECATION") android.text.Html.fromHtml(html)) // versão com 2 parâmetros só existe no Android 7+
+            .toString().replace(Regex("[\\uFFFC\\s]+"), " ").trim()
 
     fun summary(text: String): String {
         val sents = Regex("(?<=[.!?])\\s+").split(text).filter { it.length > 25 }

@@ -3,6 +3,13 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Chave própria do LumeStarTV: a TV só aceita atualizações assinadas com ela.
+// O arquivo e as senhas NUNCA ficam no repositório — vêm de segredos do GitHub
+// na hora de compilar (STORE_FILE, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD).
+// Para compilar no PC, aponte STORE_FILE para a sua lumestar.keystore local.
+val keystorePath: String? = System.getenv("STORE_FILE")
+val temAssinatura = keystorePath != null && file(keystorePath).exists()
+
 android {
     namespace = "com.lumestar.tv"
     compileSdk = 34
@@ -11,19 +18,13 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 36
-        versionName = "0.8.2"
+        versionCode = 37
+        versionName = "0.8.3"
         // chave padrão do TMDB: vem do segredo TMDB_KEY do GitHub na hora de compilar (nunca fica no código)
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() } + "\"")
         buildConfigField("String", "TMDB_KEY2", "\"" + (System.getenv("TMDB_KEY_2") ?: "").filter { it.isLetterOrDigit() } + "\"")
     }
 
-    // Chave própria do LumeStarTV: a TV só aceita atualizações assinadas com ela.
-    // O arquivo e as senhas NUNCA ficam no repositório — vêm de segredos do GitHub
-    // na hora de compilar (STORE_FILE, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD).
-    // Para compilar no PC, aponte STORE_FILE para a sua lumestar.keystore local.
-    val keystorePath = System.getenv("STORE_FILE")
-    val temAssinatura = keystorePath != null && file(keystorePath).exists()
     signingConfigs {
         if (temAssinatura) {
             create("lumestar") {
@@ -39,17 +40,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // A versão publicada PRECISA ser assinada (a TV só aceita atualização
-            // com a chave certa). Sem os segredos, o build falha de propósito,
-            // em vez de gerar um APK sem assinatura que as TVs rejeitariam.
-            if (temAssinatura) {
-                signingConfig = signingConfigs.getByName("lumestar")
-            } else {
-                throw GradleException(
-                    "Build de release sem chave de assinatura. Defina os segredos " +
-                    "STORE_FILE, STORE_PASSWORD, KEY_ALIAS e KEY_PASSWORD."
-                )
-            }
+            if (temAssinatura) signingConfig = signingConfigs.getByName("lumestar")
         }
         debug {
             // O debug pode rodar sem a chave (testes locais); se houver, usa.
@@ -72,6 +63,13 @@ android {
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
+    }
+    // Lista toda chamada a recurso que não existe no minSdk (ex.: Android 5.1 do Fire TV Stick 2)
+    lint {
+        checkOnly.add("NewApi")
+        abortOnError = false
+        textReport = true
+        textOutput = file("build/lint-newapi.txt")
     }
     packaging {
         resources.excludes.add("META-INF/*")
@@ -103,4 +101,16 @@ dependencies {
     implementation("androidx.media3:media3-datasource-okhttp:$media3")
     implementation("androidx.media3:media3-datasource-rtmp:$media3")
     implementation("androidx.media3:media3-effect:$media3")
+}
+
+// A versão publicada PRECISA ser assinada (a TV só aceita atualização com a chave certa).
+// Sem os segredos, gerar o release falha de propósito — mas só na hora de gerar o APK,
+// para não travar o debug nem as verificações.
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        if (!temAssinatura) throw GradleException(
+            "Build de release sem chave de assinatura. Defina os segredos " +
+            "STORE_FILE, STORE_PASSWORD, KEY_ALIAS e KEY_PASSWORD."
+        )
+    }
 }
