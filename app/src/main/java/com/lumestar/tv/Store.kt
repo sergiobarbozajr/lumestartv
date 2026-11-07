@@ -1,6 +1,7 @@
 package com.lumestar.tv
 
 import android.content.Context
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -14,11 +15,28 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
-/** Senhas guardadas criptografadas com uma chave do próprio aparelho (Android Keystore). */
+/**
+ * Senhas guardadas criptografadas com uma chave do próprio aparelho (Android Keystore).
+ * Android 6+: chave AES gerada direto no Keystore.
+ * Android 5.x: o Keystore ainda não gera AES, então uma chave RSA do Keystore "embrulha"
+ * uma chave AES aleatória, guardada embrulhada nas preferências privadas do app.
+ */
 object Secret {
     private const val ALIAS = "lumestar-senhas"
-    private fun key(): SecretKey {
+    private const val ALIAS_RSA = "lumestar-senhas-rsa"
+    private var app: Context? = null
+    @Volatile private var cached: SecretKey? = null
+
+    fun init(c: Context) { app = c.applicationContext }
+
+    private val legacy get() = Build.VERSION.SDK_INT < 23
+
+    @Synchronized
+    private fun key(): SecretKey = cached ?: (if (legacy) keyLegacy() else keyModern()).also { cached = it }
+
+    private fun keyModern(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
         val g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
@@ -26,12 +44,44 @@ object Secret {
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
         return g.generateKey()
     }
+
+    @Suppress("DEPRECATION")
+    private fun keyLegacy(): SecretKey {
+        val c = app ?: throw IllegalStateException("Secret.init não foi chamado")
+        val sp = c.getSharedPreferences("lumestar-chave", Context.MODE_PRIVATE)
+        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (!ks.containsAlias(ALIAS_RSA)) {
+            val ini = java.util.Calendar.getInstance()
+            val fim = java.util.Calendar.getInstance().apply { add(java.util.Calendar.YEAR, 30) }
+            val spec = android.security.KeyPairGeneratorSpec.Builder(c).setAlias(ALIAS_RSA)
+                .setSubject(javax.security.auth.x500.X500Principal("CN=LumeStarTV"))
+                .setSerialNumber(java.math.BigInteger.ONE).setStartDate(ini.time).setEndDate(fim.time).build()
+            java.security.KeyPairGenerator.getInstance("RSA", "AndroidKeyStore").apply { initialize(spec) }.generateKeyPair()
+            sp.edit().remove("aesEmbrulhada").commit() // chave RSA nova: a AES antiga não abre mais
+        }
+        val par = ks.getEntry(ALIAS_RSA, null) as KeyStore.PrivateKeyEntry
+        sp.getString("aesEmbrulhada", null)?.let { w ->
+            val rsa = Cipher.getInstance("RSA/ECB/PKCS1Padding", "AndroidOpenSSL")
+            rsa.init(Cipher.DECRYPT_MODE, par.privateKey)
+            return SecretKeySpec(rsa.doFinal(Base64.decode(w, Base64.NO_WRAP)), "AES")
+        }
+        val raw = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        val rsa = Cipher.getInstance("RSA/ECB/PKCS1Padding", "AndroidOpenSSL")
+        rsa.init(Cipher.ENCRYPT_MODE, par.certificate.publicKey)
+        sp.edit().putString("aesEmbrulhada", Base64.encodeToString(rsa.doFinal(raw), Base64.NO_WRAP)).commit()
+        return SecretKeySpec(raw, "AES")
+    }
+
     fun enc(plain: String): String = try {
         if (plain.isEmpty()) "" else {
-            val c = Cipher.getInstance("AES/GCM/NoPadding"); c.init(Cipher.ENCRYPT_MODE, key())
+            val c = Cipher.getInstance("AES/GCM/NoPadding")
+            // Keystore (6+) gera o IV sozinho; com chave de software (5.x) o IV aleatório é nosso
+            if (legacy) c.init(Cipher.ENCRYPT_MODE, key(), GCMParameterSpec(128, ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }))
+            else c.init(Cipher.ENCRYPT_MODE, key())
             Base64.encodeToString(c.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(c.doFinal(plain.toByteArray()), Base64.NO_WRAP)
         }
     } catch (e: Throwable) { "" }
+
     fun dec(s: String): String = try {
         if (!s.contains(":")) "" else {
             val (iv, data) = s.split(":", limit = 2)
@@ -64,6 +114,7 @@ object Store {
     var adultOpen = false
 
     fun init(c: Context) {
+        Secret.init(c)
         sp = c.getSharedPreferences("lumestar-dados", Context.MODE_PRIVATE)
         try {
             val a = JSONArray(sp.getString("contas", "[]"))

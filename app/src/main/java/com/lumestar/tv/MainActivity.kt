@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
         }
         val prefs = Prefs(this)
         Store.init(this)
+        Secret.init(this) // antes de qualquer senha ser lida (proxy, TMDB, contas)
         PP.init(this)
         Tmdb.init(this)
         // diagnóstico de imagem: uma vez por versão, em segundo plano, 20 s depois de abrir (fora da abertura)

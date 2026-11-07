@@ -127,21 +127,28 @@ object Updater {
 
     private fun install(c: Context, file: File) {
         try {
-            if (!c.packageManager.canRequestPackageInstalls()) {
+            // a permissão por app só existe no Android 8+; antes, vale a opção global "Fontes desconhecidas"
+            if (android.os.Build.VERSION.SDK_INT >= 26 && !c.packageManager.canRequestPackageInstalls()) {
                 val i = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + c.packageName))
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 c.startActivity(i)
                 return
             }
-            val uri = FileProvider.getUriForFile(c, c.packageName + ".fileprovider", file)
+            // o instalador só aceita content:// (FileProvider) no Android 7+; antes, arquivo legível + file://
+            val uri = if (android.os.Build.VERSION.SDK_INT >= 24) FileProvider.getUriForFile(c, c.packageName + ".fileprovider", file)
+            else {
+                file.parentFile?.setExecutable(true, false); c.cacheDir.setExecutable(true, false); file.setReadable(true, false)
+                Uri.fromFile(file)
+            }
             val i = Intent(Intent.ACTION_VIEW)
             i.setDataAndType(uri, "application/vnd.android.package-archive")
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             c.startActivity(i)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
         }
     }
 
     fun canInstall(c: Context): Boolean =
-        try { c.packageManager.canRequestPackageInstalls() } catch (e: Exception) { true }
+        if (android.os.Build.VERSION.SDK_INT < 26) true
+        else try { c.packageManager.canRequestPackageInstalls() } catch (e: Throwable) { true }
 }
