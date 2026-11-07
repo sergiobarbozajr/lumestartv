@@ -78,7 +78,7 @@ object ImageAi {
         val style = when (PP.colorStyle) { "vivido" -> "Vívido"; "cinema" -> "Cinema"; else -> "Fiel" }
         val p = if (cap <= 0) Plan("none", emptyList(), "IA pausada (TV no limite)$chipTv", 0, h)
         else Plan("scene$tag", fxNative(), "IA $style · $src$chipTv", 1, h)
-        return if (compare && p.effects.isEmpty()) Plan("cmp$tag", fx(0, true, 0.4f), "Comparando: original | IA", p.tier, h)
+        return if (compare && p.effects.isEmpty()) Plan("cmp$tag", fxNative(), "Comparando: original | IA", p.tier, h)
         else if (compare) Plan(p.key, p.effects, "Comparando: original | " + p.label, p.tier, p.outH) else p
     }
 }
