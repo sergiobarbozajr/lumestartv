@@ -17,7 +17,8 @@ class MainActivity : ComponentActivity() {
         phone = when (intent?.getStringExtra("modo")) { "tv" -> false; "celular" -> true; else -> isPhone(this) }
         if (phone) {
             // celular: em pé, com as barras do sistema; o conteúdo desenha por baixo delas (padding nas telas)
-            requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            requestedOrientation = if (isTablet(this)) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         } else {
             requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -29,7 +30,7 @@ class MainActivity : ComponentActivity() {
         PP.init(this)
         Tmdb.init(this)
         // diagnóstico de imagem: uma vez por versão, em segundo plano, 20 s depois de abrir (fora da abertura)
-        Perf.init(this)
+        Perf.init(this, prefs.perf)
         if (Perf.lite) {
             // aparelho fraco: não roda o teste pesado de GPU; IA de imagem fica desligada (nível 0)
             GpuProbe.result = GpuProbe.Result("modo leve", "", 99f, 99f, 99f)

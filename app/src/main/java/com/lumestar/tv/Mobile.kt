@@ -79,6 +79,35 @@ fun isPhone(a: Activity): Boolean {
     return !tv
 }
 
+/**
+ * Tamanho da tela no celular/tablet, para o layout se ajustar do aparelho mais simples ao mais novo.
+ * Compacto: < 360 dp de largura (celulares pequenos/de entrada). Normal: 360–599 dp.
+ * Expandido: 600 dp+ (tablets, dobráveis abertos, celular deitado).
+ */
+class MWin(val wDp: Int, val hDp: Int) {
+    val compact get() = wDp < 360
+    val expanded get() = wDp >= 600
+    /** largura dos cartões de filme/série e de canal nas fileiras */
+    val cardW get() = if (compact) 96 else if (expanded) 136 else 112
+    val liveW get() = if (compact) 144 else if (expanded) 208 else 168
+    /** destaque do Início: no máximo ~55% da altura (antes 420 dp fixos) */
+    val heroH get() = (hDp * if (expanded) 0.6f else 0.55f).toInt().coerceIn(240, if (expanded) 480 else 420)
+    /** topo da tela de detalhes */
+    val bannerH get() = (hDp * 0.32f).toInt().coerceIn(170, 320)
+    val newsW get() = if (compact) 220 else if (expanded) 300 else 250
+}
+
+val LocalMWin = androidx.compose.runtime.staticCompositionLocalOf { MWin(390, 800) }
+
+@Composable
+private fun rememberMWin(): MWin {
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    return remember(cfg.screenWidthDp, cfg.screenHeightDp) { MWin(cfg.screenWidthDp, cfg.screenHeightDp) }
+}
+
+/** Tablet (menor lado ≥ 600 dp): pode girar; celular fica em pé fora do vídeo. */
+fun isTablet(c: android.content.Context): Boolean = c.resources.configuration.smallestScreenWidthDp >= 600
+
 private val MTABS = listOf("inicio" to "Início", "aovivo" to "Ao vivo", "filmes" to "Filmes", "series" to "Séries", "mais" to "Mais")
 private val MTAB_ICON = mapOf("inicio" to "home", "aovivo" to "live", "filmes" to "film", "series" to "series", "mais" to "grid")
 private val MORE = listOf(
@@ -93,11 +122,13 @@ private val MORE = listOf(
 fun MobileApp(prefs: Prefs, args: LaunchArgs, finish: () -> Unit) {
     val st = remember { AppState(prefs) }
     var intro by remember { mutableStateOf(prefs.intro && !args.skipIntro) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalMWin provides rememberMWin()) {
     Box(Modifier.fillMaxSize().background(C.bg)) {
         MobileShell(st, args, finish)
         if (intro) Box(Modifier.fillMaxSize().background(Color.Black).clickable { Sfx.stopLong(); intro = false }) {
             DesignScale { IntroScreen(prefs.sounds) { intro = false } }
         }
+    }
     }
     if (intro) BackHandler { Sfx.stopLong(); intro = false }
 }
@@ -118,7 +149,8 @@ private fun MobileShell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     val playing = st.player != null
     LaunchedEffect(playing) {
         val a = act ?: return@LaunchedEffect
-        a.requestedOrientation = if (playing) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        a.requestedOrientation = if (playing) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else if (isTablet(a)) ActivityInfo.SCREEN_ORIENTATION_FULL_USER else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         val c = WindowCompat.getInsetsController(a.window, a.window.decorView)
         if (playing) { c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; c.hide(WindowInsetsCompat.Type.systemBars()) } else c.show(WindowInsetsCompat.Type.systemBars())
     }
@@ -227,8 +259,9 @@ private fun MRow(st: AppState, title: String, items: List<Item>, menu: (Item) ->
             T(title, 16, C.fg, FontWeight.ExtraBold, maxLines = 1, modifier = Modifier.weight(1f))
             if (more != null) T("Ver tudo", 12, C.a1, FontWeight.Bold, modifier = Modifier.clickable { more() }.padding(4.dp))
         }
+        val win = LocalMWin.current
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(items.take(40), key = { it.id }) { i -> MCard(st, i, caption?.invoke(i), if (i.kind == LIVE) 168 else 112, menu) }
+            items(items.take(40), key = { it.id }) { i -> MCard(st, i, caption?.invoke(i), if (i.kind == LIVE) win.liveW else win.cardW, menu) }
         }
     }
 }
@@ -296,7 +329,7 @@ private fun MHome(st: AppState, go: (String) -> Unit) {
         val news = NewsState.list
         if (news.isNotEmpty()) Column(Modifier.padding(top = 18.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { T("Notícias", 16, C.fg, FontWeight.ExtraBold, modifier = Modifier.weight(1f)); T("Ver tudo", 12, C.a1, FontWeight.Bold, modifier = Modifier.clickable { go("noticias") }) }
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { items(news.take(8)) { n -> MNewsCard(st, n, 250) } }
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { items(news.take(8)) { n -> MNewsCard(st, n, LocalMWin.current.newsW) } }
         }
         MRow(st, "Minha lista", favs, setMenu, more = { go("lista") })
         MRow(st, "Visto", seen, setMenu, caption = { "✓ Visto" })
@@ -309,7 +342,7 @@ private fun MHome(st: AppState, go: (String) -> Unit) {
 private fun MHeroCard(st: AppState, e0: HeroEntry) {
     val m = e0.item?.let { Tmdb.meta(it) }
     val bg = m?.backdropUrl()?.ifBlank { null } ?: e0.img
-    Box(Modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(22.dp)).background(coverBrush(e0.title))) {
+    Box(Modifier.fillMaxWidth().height(LocalMWin.current.heroH.dp).clip(RoundedCornerShape(22.dp)).background(coverBrush(e0.title))) {
         if (bg.isNotBlank()) Img(bg, 720, 1080, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.3f to Color.Transparent, 0.8f to C.bg.copy(alpha = .92f))))
         Column(Modifier.align(Alignment.BottomStart).padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -416,7 +449,7 @@ private fun MGrid(st: AppState, list: List<Item>, menu: (Item) -> Unit) {
 
 @Composable
 private fun MMore(open: (String) -> Unit) {
-    LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyVerticalGrid(GridCells.Adaptive(150.dp), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(MORE) { (id, name, ic) ->
             Column(Modifier.clip(RoundedCornerShape(16.dp)).background(C.panel).clickable { open(id) }.padding(14.dp).height(64.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 Icon(ic, C.a1, 24.dp); T(name, 14, C.fg, FontWeight.Bold)
@@ -511,7 +544,7 @@ private fun MDetail(st: AppState, it: Item) {
     Box(Modifier.fillMaxSize().background(C.bg)) {
         LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
             item {
-                Box(Modifier.fillMaxWidth().height(250.dp).background(coverBrush(it.title + "bg"))) {
+                Box(Modifier.fillMaxWidth().height(LocalMWin.current.bannerH.dp).background(coverBrush(it.title + "bg"))) {
                     val bg = tm?.backdropUrl()?.ifBlank { null } ?: it.logo
                     if (bg.isNotBlank()) Img(bg, 1080, 600, Modifier.fillMaxSize())
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to C.bg)))

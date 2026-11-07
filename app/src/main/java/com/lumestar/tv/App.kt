@@ -581,6 +581,10 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
             Seg("Sons do app", listOf(1 to "Ligado", 0 to "Desligado"), if (snd) 1 else 0, locked) { snd = it == 1; st.prefs.sounds = snd; Sfx.enabled = snd }
             Seg("Volume dos sons", listOf(1 to "Baixo", 2 to "Médio", 3 to "Alto"), vol, locked) { vol = it; st.prefs.volume = it; Sfx.setVolume(it); Sfx.ok() }
             Seg("Abertura animada", listOf(1 to "Ligada", 0 to "Desligada"), if (intro) 1 else 0, locked) { intro = it == 1; st.prefs.intro = intro }
+            var perf by remember { mutableIntStateOf(st.prefs.perf) }
+            Seg("Desempenho", listOf(Perf.AUTO to "Automático", Perf.COMPLETO to "Completo", Perf.LEVE to "Leve"), perf, locked) { perf = it; st.prefs.perf = it }
+            T(Perf.reason + (if (perf != Perf.mode) " · a mudança vale ao reabrir o app" else "") +
+                "\nLeve: sem abertura animada nem IA de imagem — para aparelhos simples que travam ou fecham.", 12, C.muted)
         }
         "update" -> UpdatePanel(st, locked)
         "contas" -> AccountsPanel(st, locked)

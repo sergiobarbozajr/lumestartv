@@ -97,6 +97,10 @@ class Prefs(c: Context) {
     var intro: Boolean
         get() = sp.getBoolean("intro", true)
         set(v) = sp.edit().putBoolean("intro", v).apply()
+    /** 0 automático · 1 sempre completo · 2 sempre leve (ver Perf) */
+    var perf: Int
+        get() = sp.getInt("desempenho", 0)
+        set(v) = sp.edit().putInt("desempenho", v).apply()
     var volume: Int
         get() = sp.getInt("volume", 2)
         set(v) = sp.edit().putInt("volume", v).apply()
