@@ -20,6 +20,7 @@ Como investigar um fechamento:
 | 8 | Fecha ao atualizar pelo app | `canRequestPackageInstalls` só no Android 8+; instalador só aceita `content://` no Android 7+ | Checagem por versão; `file://` legível no Android < 7 | 0.8.4 |
 | 9 | Modo leve ligaria sem necessidade em TVs novas de 1,5 GB | Regra cautelosa demais (RAM ≤ 1,5 GB); o vazamento só existe no Android < 8 | Automático = Android < 8 ou aparelho "pouca memória"; opção **Desempenho: Automático / Completo / Leve** | 0.8.5 |
 | 10 | Celular: destaque ocupando a tela em aparelho pequeno; tablet travado em pé | Medidas fixas (420/250 dp, 2 colunas) e orientação fixa | Classe de tela (compacto < 360 dp, normal, expandido ≥ 600 dp) ajusta cartões, destaque, detalhes e grades; tablet gira | 0.8.5 |
+| 11 | Teste de desempenho: "o vídeo de teste não tocou" nos dois modos (TCL A400M, Android 14) | Vídeo 4K de teste sem imagem em 30 s: servidor lento/fora do ar sem erro, ou decodificador sem o 4K no clássico; a troca para a reserva só acontecia em erro de rede/formato | 20 s sem imagem ou erro de decodificador no clássico → próximo vídeo de reserva; espera até 60 s; relatório mostra o código do erro | próxima |
 
 Lições gerais:
 - Testar sempre no aparelho mais fraco do público (o tank), não só no emulador (API 30).
