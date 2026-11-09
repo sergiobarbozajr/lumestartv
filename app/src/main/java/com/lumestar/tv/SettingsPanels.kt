@@ -112,6 +112,11 @@ fun ListsPanel(st: AppState, locked: Boolean) {
             Btn("Remover", locked = locked) { Store.lists.removeAt(i); Store.saveLists(); tick++; Catalog.refresh(ctx) }
         }
     }
+    val faltam = Store.NATIVAS.filter { (_, u) -> !Store.hasList(u) }
+    if (faltam.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.bg).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        T("LISTAS DE FÁBRICA (grátis e legais, atualizadas toda semana)", 10, C.a1, FontWeight.Bold)
+        faltam.forEach { (n, u) -> Btn("+ " + n.removeSuffix(" (LumeStarTV)"), locked = locked) { Store.addList(n, u); tick++; Catalog.refresh(ctx); st.say("Lista adicionada: " + n.removeSuffix(" (LumeStarTV)")) } }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Btn("+ Adicionar lista", locked = locked, primary = true) {
             st.kb = KbTarget("Endereço da lista", "", hint = "http://servidor/lista.m3u") { url ->

@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         }
         val prefs = Prefs(this)
-        Store.init(this)
+        Store.init(this); Store.listasDeFabrica()
         Secret.init(this) // antes de qualquer senha ser lida (proxy, TMDB, contas)
         PP.init(this)
         Tmdb.init(this); Logos.init(this); ImageAi.initTela(this); Reporter.init(this)
