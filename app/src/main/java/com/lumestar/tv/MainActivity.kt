@@ -105,4 +105,10 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         Sfx.stopLong()
     }
+
+    // fotos ao vivo dos canais só com o app na tela
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    override fun onStart() { super.onStart(); Thumbs.ligado = true }
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    override fun onStop() { super.onStop(); Thumbs.ligado = false }
 }

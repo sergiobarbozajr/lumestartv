@@ -107,14 +107,12 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
 
             Tmdb.rev.let { }
             val cover = if (it.kind == LIVE) it.logo.ifBlank { Logos.rev.let { _ -> Logos.find(it.title) } } else Tmdb.poster(it).ifBlank { it.logo }
-            if (wide) {
-                // canal: logo ocupando o card, fundo na cor do logo; sem logo, um logo desenhado com o nome
-                LogoArte(it.title, cover, Modifier.fillMaxSize(), pad = 10.dp, tamanhoNome = 17)
+            if (wide && it.kind == LIVE) {
+                CanalArte(it, cover)
+            } else if (wide) {
+                LogoArte(it.title, cover, Modifier.fillMaxSize(), pad = 10.dp, tamanhoNome = 17) { ModeloCard(modeloDe(it), it.title, Modifier.fillMaxSize()) }
             } else {
-                if (cover.isBlank()) Box(Modifier.fillMaxSize()) {
-                    NomeArte(Tmdb.title(it), 15)
-                    T(if (it.kind == SERIES) "SÉRIE" else "FILME", 8, Color.White.copy(alpha = .7f), FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(8.dp))
-                }
+                if (cover.isBlank()) ModeloCard(modeloDe(it), Tmdb.title(it), Modifier.fillMaxSize())
                 Img(cover, 212, 316, Modifier.fillMaxSize(), crop = true)
             }
             if (it.kind == LIVE && it.id in PP.offline) Box(Modifier.align(Alignment.TopStart).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xE0B0203C)).padding(horizontal = 6.dp, vertical = 2.dp)) { T("FORA DO AR", 8, Color.White, FontWeight.Bold) }
@@ -327,4 +325,36 @@ private fun SetaBtn(label: String, locked: Boolean, onFoco: (Boolean) -> Unit, o
             .clickable(remember { MutableInteractionSource() }, null) { Sfx.ok(); onClick() }
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) { T(label, 12, if (f) Color(0xFF050816) else C.fg, FontWeight.SemiBold, maxLines = 1) }
+}
+
+
+/** Qual desenho usar quando não há imagem. */
+fun modeloDe(it: Item): Modelo = when {
+    it.kind == LIVE -> Modelo.CANAL
+    it.kind == SERIES -> Modelo.SERIE
+    it.group.isBlank() || it.group.equals("outros", true) -> Modelo.VIDEO
+    else -> Modelo.FILME
+}
+
+/**
+ * Card de canal: foto do que está passando agora (quando já capturada) com o logo pequeno e "AO VIVO";
+ * sem foto, o logo com fundo na cor dele; sem logo, a TV desenhada com o nome. Sempre com o selo AO VIVO.
+ */
+@Composable
+fun CanalArte(it: Item, logo: String) {
+    Thumbs.rev.let { }
+    LaunchedEffect(it.id) { Thumbs.pedir(it) }
+    val foto = Thumbs.foto(it.id)
+    Box(Modifier.fillMaxSize()) {
+        if (foto != null) {
+            androidx.compose.foundation.Image(foto, it.title, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            if (logo.isNotBlank()) Box(Modifier.align(Alignment.TopStart).padding(5.dp).size(46.dp, 26.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xCC050816)).padding(3.dp)) {
+                Img(logo, 92, 52, Modifier.fillMaxSize(), crop = false)
+            }
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))).padding(horizontal = 7.dp, vertical = 4.dp)) {
+                T(it.title, 10, Color.White, FontWeight.Bold, maxLines = 1)
+            }
+        } else LogoArte(it.title, logo, Modifier.fillMaxSize(), pad = 10.dp, tamanhoNome = 17) { ModeloCard(Modelo.CANAL, it.title, Modifier.fillMaxSize(), aoVivo = false) }
+        AoVivo(Modifier.align(Alignment.TopEnd).padding(5.dp))
+    }
 }

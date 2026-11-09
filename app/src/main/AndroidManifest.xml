@@ -45,6 +45,17 @@
         <package android:name="com.aspiro.tidal" />
         <package android:name="com.apple.android.music" />
         <package android:name="tunein.player" />
+        <package android:name="br.com.netmovies" />
+        <package android:name="com.netmovies.app" />
+        <package android:name="br.com.sbt.app" />
+        <package android:name="com.sbt.sbtvideos" />
+        <package android:name="tv.runtime.android" />
+        <package android:name="br.com.telabrasil" />
+        <package android:name="com.telabrasil" />
+        <package android:name="br.com.spcineplay" />
+        <package android:name="com.spcine.play" />
+        <package android:name="br.org.itaucultural.play" />
+        <package android:name="com.itaucultural.play" />
         <package android:name="com.google.android.videos" />
         <package android:name="com.mercadolibre.play" />
         <package android:name="com.mercadolibre" />

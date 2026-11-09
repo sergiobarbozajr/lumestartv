@@ -114,6 +114,10 @@ key KEYCODE_DPAD_RIGHT 0.5; key KEYCODE_DPAD_RIGHT 0.5; key KEYCODE_DPAD_CENTER 
 shot "tema_aurora_config"
 abre --es pagina inicio
 shot "tema_aurora_inicio"
+abre --es pagina aovivo
+sleep 30; shot "aovivo_fotos"
+abre --es pagina filmes
+sleep 4; shot "filmes_modelos"
 abre --es pagina radio
 sleep 6; shot "radio"
 abre --es pagina streaming

@@ -81,6 +81,32 @@ object Radio {
     /** Para a rádio (ex.: ao abrir um vídeo). */
     fun parar() { controller?.let { it.stop(); it.clearMediaItems() }; tocando = null; pausado = false; estado = "" }
 
+    private fun ler(u: String, todas: LinkedHashMap<String, Estacao>) {
+        val a = JSONArray(Net.text(u))
+        for (i in 0 until a.length()) {
+            val o = a.getJSONObject(i)
+            val url = o.optString("url_resolved").ifBlank { o.optString("url") }
+            if (url.isBlank() || o.optInt("lastcheckok", 1) != 1) continue
+            val id = o.optString("stationuuid")
+            if (todas.containsKey(id)) continue
+            todas[id] = Estacao(id, o.optString("name").trim(), url, o.optString("favicon"), "", o.optString("state"),
+                o.optDouble("geo_lat", Double.NaN), o.optDouble("geo_long", Double.NaN), o.optString("tags"), o.optInt("votes"), o.optInt("bitrate"))
+        }
+    }
+
+    /** Busca pelo nome da rádio no Brasil inteiro (ex.: "Jovem Pan", "CBN"), as mais ouvidas primeiro. */
+    fun buscarNome(q: String, cb: (List<Estacao>, String) -> Unit) {
+        Thread {
+            val todas = LinkedHashMap<String, Estacao>(); var erro = ""
+            try { ler("$API?countrycode=BR&name=" + URLEncoder.encode(q.trim(), "UTF-8") + "&hidebroken=true&order=clickcount&reverse=true&limit=80", todas) }
+            catch (e: Throwable) { erro = "Não consegui buscar: " + Net.why(e) }
+            if (todas.size < 5 && erro.isBlank()) try { // sem acento também ("Sao Paulo")
+                ler("$API?countrycode=BR&name=" + URLEncoder.encode(semAcento(q.trim()), "UTF-8") + "&hidebroken=true&order=clickcount&reverse=true&limit=80", todas)
+            } catch (e: Throwable) {}
+            android.os.Handler(android.os.Looper.getMainLooper()).post { cb(todas.values.toList(), if (todas.isEmpty() && erro.isBlank()) "Nenhuma rádio no ar com esse nome." else erro) }
+        }.start()
+    }
+
     private fun semAcento(t: String) = Normalizer.normalize(t, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 
     private fun distancia(a: Double, b: Double, c: Double, d: Double): Double {
@@ -98,17 +124,7 @@ object Radio {
             val todas = LinkedHashMap<String, Estacao>()
             var erro = ""
             for (st in listOf(estadoUf, semAcento(estadoUf)).distinct().filter { it.isNotBlank() }) try {
-                val u = "$API?countrycode=BR&state=" + URLEncoder.encode(st, "UTF-8") + "&hidebroken=true&order=clickcount&reverse=true&limit=400"
-                val a = JSONArray(Net.text(u))
-                for (i in 0 until a.length()) {
-                    val o = a.getJSONObject(i)
-                    val url = o.optString("url_resolved").ifBlank { o.optString("url") }
-                    if (url.isBlank() || o.optInt("lastcheckok", 1) != 1) continue
-                    val id = o.optString("stationuuid")
-                    if (todas.containsKey(id)) continue
-                    todas[id] = Estacao(id, o.optString("name").trim(), url, o.optString("favicon"), "", o.optString("state"),
-                        o.optDouble("geo_lat", Double.NaN), o.optDouble("geo_long", Double.NaN), o.optString("tags"), o.optInt("votes"), o.optInt("bitrate"))
-                }
+                ler("$API?countrycode=BR&state=" + URLEncoder.encode(st, "UTF-8") + "&hidebroken=true&order=clickcount&reverse=true&limit=400", todas)
             } catch (e: Throwable) { erro = "Não consegui buscar as rádios: " + Net.why(e) }
             val nomeCidade = semAcento(cidade.substringBefore(',')).lowercase().trim()
             val perto = ArrayList<Estacao>(); val resto = ArrayList<Estacao>()
@@ -134,6 +150,9 @@ fun RadioPage(st: AppState, locked: Boolean) {
     var erro by remember { mutableStateOf("") }
     var opcoes by remember { mutableStateOf<List<Weather.Place>>(emptyList()) }
     var buscaMsg by remember { mutableStateOf("") }
+    var nomeBusca by remember { mutableStateOf("") }
+    var nomeMsg by remember { mutableStateOf("") }
+    var achadas by remember { mutableStateOf<List<Estacao>?>(null) }
     // cidade padrão: a do clima; se não houver, Rio de Janeiro
     if (PP.radioEstado.isBlank()) { PP.radioCidade = "Rio de Janeiro, Rio de Janeiro"; PP.radioEstado = "Rio de Janeiro"; PP.radioPos = "-22.9068,-43.1729" }
     val pos = PP.radioPos.split(',').mapNotNull { it.toDoubleOrNull() }
@@ -143,7 +162,7 @@ fun RadioPage(st: AppState, locked: Boolean) {
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 56.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         T("Rádio", 30, C.fg, FontWeight.ExtraBold)
-        T("Rádios online da cidade que você escolher. A rádio continua tocando quando você sai do app; os controles ficam na notificação e no controle remoto.", 13, C.muted, lineHeight = 19)
+        T("Rádios online da cidade que você escolher, ou busque pelo nome. A rádio continua tocando quando você sai do app; os controles ficam na notificação e no controle remoto.", 13, C.muted, lineHeight = 19)
         Radio.tocando?.let { e ->
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.panel).border(1.dp, C.a1, RoundedCornerShape(14.dp)).padding(12.dp).focusGroup(),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -164,6 +183,18 @@ fun RadioPage(st: AppState, locked: Boolean) {
             if (q.isNotBlank()) { buscaMsg = "Procurando…"; Weather.search(q) { l, m -> opcoes = l.filter { it.country.contains("Brasil", true) || it.country.contains("Brazil", true) }.ifEmpty { l }; buscaMsg = if (l.isEmpty()) m.ifBlank { "Não achei essa cidade." } else "" } }
         }
         if (buscaMsg.isNotBlank()) T(buscaMsg, 12, C.muted)
+        FieldRow(st, "Buscar rádio", nomeBusca, locked, hint = "Nome da rádio (ex.: Jovem Pan, CBN, Antena 1)") { q ->
+            nomeBusca = q; achadas = null
+            if (q.isNotBlank()) { nomeMsg = "Procurando…"; Radio.buscarNome(q) { l, m -> achadas = l; nomeMsg = m } } else nomeMsg = ""
+        }
+        if (nomeMsg.isNotBlank()) T(nomeMsg, 12, C.muted)
+        achadas?.takeIf { it.isNotEmpty() }?.let { l ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                T("RESULTADO PARA \"${nomeBusca.uppercase()}\" (${l.size})", 11, C.muted, FontWeight.Bold)
+                Btn("Limpar busca", locked = locked) { achadas = null; nomeBusca = ""; nomeMsg = "" }
+            }
+            GradeRadios(ctx, l, locked)
+        }
         if (opcoes.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
             opcoes.take(5).forEach { p ->
                 Btn(p.label, locked = locked) { PP.radioCidade = p.name + ", " + p.region; PP.radioEstado = p.region; PP.radioPos = "${p.lat},${p.lon}"; opcoes = emptyList(); st.say("Rádios de ${p.name}") }

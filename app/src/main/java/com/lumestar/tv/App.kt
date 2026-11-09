@@ -221,6 +221,9 @@ fun LumeApp(prefs: Prefs, args: LaunchArgs = LaunchArgs(), finish: () -> Unit) {
 
     DesignScale {
         Box(Modifier.fillMaxSize().background(C.bg)) {
+            // fotos ao vivo dos canais: tela de vídeo pequena escondida embaixo de tudo
+            if (phase != "intro") ThumbHost { st.player != null }
+            Box(Modifier.size(100.dp, 58.dp).background(C.bg))
             ThemeBackdrop()
             if (phase != "intro") Shell(st, args, finish)
             if (phase == "intro") {

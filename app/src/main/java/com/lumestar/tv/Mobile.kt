@@ -158,6 +158,8 @@ private fun MobileShell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     val p = st.player
     if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { key(p.id, p.url) { PlayerScreen(st, p, touchMode = true) } } }; MToast(st); return }
 
+    ThumbHost { st.player != null }
+    Box(Modifier.size(100.dp, 58.dp).background(C.bg))
     ThemeBackdrop()
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         MTop(st) { stack.add("pesquisa") }
@@ -237,9 +239,9 @@ private fun MCard(st: AppState, it: Item, caption: String? = null, width: Int = 
     Column(Modifier.width(width.dp).combinedClickable(onClick = { openItem(st, it) }, onLongClick = { menu(it) })) {
         Box(Modifier.fillMaxWidth().aspectRatio(if (live) 16f / 9f else 2f / 3f).clip(RoundedCornerShape(12.dp)).background(coverBrush(it.title))) {
             val cover = if (live) it.logo.ifBlank { Logos.rev.let { _ -> Logos.find(it.title) } } else Tmdb.poster(it).ifBlank { it.logo }
-            if (live) LogoArte(it.title, cover, Modifier.fillMaxSize(), pad = 8.dp, tamanhoNome = 15)
+            if (live) CanalArte(it, cover)
             else if (cover.isNotBlank()) Img(cover, 240, 360, Modifier.fillMaxSize(), crop = true)
-            else NomeArte(Tmdb.title(it), 14)
+            else ModeloCard(modeloDe(it), Tmdb.title(it), Modifier.fillMaxSize())
             Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(28.dp).clip(CircleShape).background(Color(0xB0050816)).clickable { Store.toggleFav(it.id); st.say(if (!fav) "♥ Na Minha lista" else "Removido da Minha lista") }, contentAlignment = Alignment.Center) {
                 T(if (fav) "♥" else "♡", 14, if (fav) Color(0xFFFF8FB8) else Color.White, FontWeight.Bold)
             }

@@ -72,7 +72,7 @@ object Arte {
 }
 
 @Composable
-fun LogoArte(nome: String, url: String, modifier: Modifier = Modifier, pad: Dp = 8.dp, tamanhoNome: Int = 18) {
+fun LogoArte(nome: String, url: String, modifier: Modifier = Modifier, pad: Dp = 8.dp, tamanhoNome: Int = 18, semLogo: (@Composable () -> Unit)? = null) {
     val ctx = LocalContext.current
     var falhou by remember(url) { mutableStateOf(url.isBlank()) }
     var cor by remember(url) { mutableStateOf(Arte.cor(url)) }
@@ -85,7 +85,7 @@ fun LogoArte(nome: String, url: String, modifier: Modifier = Modifier, pad: Dp =
             onSuccess = { s -> Arte.calcular(url, s.result.drawable); cor = Arte.cor(url) },
             onError = { falhou = true },
         )
-        if (falhou) NomeArte(nome, tamanhoNome)
+        if (falhou) { if (semLogo != null) semLogo() else NomeArte(nome, tamanhoNome) }
     }
 }
 

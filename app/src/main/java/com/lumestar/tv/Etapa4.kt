@@ -55,7 +55,7 @@ import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
 // ---------------- apps de streaming e de música ----------------
-class TvApp(val name: String, val pkgs: List<String>, val note: String, val site: String = "")
+class TvApp(val name: String, val pkgs: List<String>, val note: String, val site: String = "", val busca: Boolean = false)
 
 val STREAM_APPS = listOf(
     TvApp("Netflix", listOf("com.netflix.ninja", "com.netflix.mediaclient"), "Filmes e séries", "netflix.com"),
@@ -71,6 +71,19 @@ val STREAM_APPS = listOf(
     TvApp("Plex", listOf("com.plexapp.android"), "Seus vídeos", "plex.tv"),
     TvApp("Google TV", listOf("com.google.android.videos"), "Filmes comprados e alugados", "tv.google"),
     TvApp("Mercado Play", listOf("com.mercadolibre.play", "com.mercadolibre"), "Grátis com anúncios", "mercadolivre.com.br"),
+)
+
+/** Serviços grátis e legais (com anúncios), com filmes e séries dublados ou nacionais. */
+val FREE_APPS = listOf(
+    TvApp("Pluto TV", listOf("tv.pluto.android"), "Filmes e séries sob demanda, dublados", "pluto.tv"),
+    TvApp("NetMovies", listOf("br.com.netmovies", "com.netmovies.app"), "Filmes e séries dublados", "netmovies.com.br", busca = true),
+    TvApp("Mercado Play", listOf("com.mercadolibre.play", "com.mercadolibre"), "Filmes e séries com anúncios", "mercadolivre.com.br"),
+    TvApp("Plex", listOf("com.plexapp.android"), "Filmes grátis com anúncios", "plex.tv"),
+    TvApp("+SBT", listOf("br.com.sbt.app", "com.sbt.sbtvideos"), "Novelas e programas do SBT", "sbt.com.br", busca = true),
+    TvApp("Runtime", listOf("tv.runtime.android", "com.runtime.tv"), "Filmes grátis", "runtime.tv", busca = true),
+    TvApp("Tela Brasil", listOf("br.com.telabrasil", "com.telabrasil"), "Cinema brasileiro", "telabrasil.com.br", busca = true),
+    TvApp("Spcine Play", listOf("br.com.spcineplay", "com.spcine.play"), "Cinema brasileiro e independente", "spcineplay.com.br", busca = true),
+    TvApp("Itaú Cultural Play", listOf("br.org.itaucultural.play", "com.itaucultural.play"), "Filmes e séries brasileiras", "itauculturalplay.com.br", busca = true),
 )
 
 val MUSIC_APPS = listOf(
@@ -90,6 +103,7 @@ fun openApp(c: Context, st: AppState, a: TvApp) {
     val i = appIntent(c, a)
     try {
         if (i != null) c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        else if (a.busca) c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://search?c=apps&q=" + Uri.encode(a.name))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         else c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + a.pkgs.first())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (e: Exception) { st.say("${a.name} não está instalado. Instale pela Play Store da TV.") }
 }
@@ -170,6 +184,10 @@ fun StreamingPage(st: AppState, locked: Boolean) {
         T("Abre o app oficial de cada serviço instalado na TV, com a sua assinatura. Os que não estão instalados abrem na Play Store.", 13, C.muted, lineHeight = 19, modifier = Modifier.width(620.dp))
         Spacer(Modifier.height(6.dp))
         AppsGrid(st, STREAM_APPS, locked)
+        Spacer(Modifier.height(10.dp))
+        T("Filmes e séries dublados grátis", 20, C.fg, FontWeight.ExtraBold)
+        T("Serviços gratuitos e legais, pagos por anúncios: filmes e séries dublados em português do Brasil e cinema nacional. Os que não estão instalados abrem na Play Store.", 13, C.muted, lineHeight = 19, modifier = Modifier.width(620.dp))
+        AppsGrid(st, FREE_APPS, locked)
     }
 }
 
