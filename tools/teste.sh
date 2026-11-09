@@ -114,6 +114,11 @@ key KEYCODE_DPAD_RIGHT 0.5; key KEYCODE_DPAD_RIGHT 0.5; key KEYCODE_DPAD_CENTER 
 shot "tema_aurora_config"
 abre --es pagina inicio
 shot "tema_aurora_inicio"
+abre --es pagina cfg:sobre
+sleep 3; shot "config_sobre"
+abre --es pagina cfg:ai
+sleep 3; shot "config_ia"
+abre --es pagina inicio
 adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)|PlaybackException" | tail -20 > teste/player_log.txt
 
 # lista gigante (como a de um usuário real): 40 mil filmes/séries e 5 mil canais

@@ -333,7 +333,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     fun stepDown(why: String) {
         if (ai.cap <= 0 || ai.tier <= 0) return
         ai.cap = ai.tier - 1; ai.stable = 0; ai.hist.fill(0L); applyAi()
-        say("$why: IA de imagem pausada neste vídeo")
+        say(if (ai.cap >= 1) "$why: IA voltou para a resolução do vídeo" else "$why: IA de imagem pausada neste vídeo")
     }
 
     /** Disjuntor (a cada 1 s): quadros perdidos em 10 s e temperatura do chip; sobe de novo após 60 s estável. */
@@ -351,7 +351,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             if (ai.tier > 0 && ai.hot >= android.os.PowerManager.THERMAL_STATUS_MODERATE) { stepDown("O chip esquentou"); return }
         }
         if (ai.lost <= 2 && ai.hot < 2) ai.stable++ else ai.stable = 0
-        if (ai.stable >= 60 && ai.cap < 1 && PP.aiUp != "off") { ai.cap++; ai.stable = 0; ai.hist.fill(0L); applyAi() }
+        if (ai.stable >= 60 && ai.cap < 2 && PP.aiUp != "off") { ai.cap++; ai.stable = 0; ai.hist.fill(0L); applyAi() }
         // qualidade cheia: pede a melhor versão do vídeo; se a internet engasgar, volta para o automático
         if (PP.fullQuality || (ai.tier == 0 && PP.aiUp != "off")) {
             if (player.playbackState == Player.STATE_BUFFERING) { ai.buffered = true; if (ai.bestOn) { ai.bestOn = false; player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(false).build() } }
@@ -597,7 +597,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                         } else T("Escolha \"Personalizado\" para ajustar brilho, contraste e cor.", 11, C.dim)
                         if (req.live) T("TV ao vivo: a imagem vai direto para a TV (IA e movimento da própria TV), para trocar de canal na hora. A IA do app atua em filmes e séries.", 11, C.dim, lineHeight = 15)
                         else {
-                            Opts("IA de imagem", AI_UP, if (PP.aiUp == "off") "off" else "auto") { v -> PP.aiUp = v; ai.cap = 1; ai.key = "-"; applyAi(); say("IA de imagem: ${AI_UP[v]}") }
+                            Opts("IA de imagem", AI_UP, if (PP.aiUp == "off") "off" else "auto") { v -> PP.aiUp = v; ai.cap = 2; ai.key = "-"; applyAi(); say("IA de imagem: ${AI_UP[v]}") }
                             Btn(if (cmpOn) "◐ Comparar: ligado (original | IA)" else "◐ Comparar: tela dividida", on = cmpOn, locked = false) { ai.compare = !ai.compare; cmpOn = ai.compare; ai.key = "-"; applyAi(); say(if (cmpOn) "Esquerda: original · Direita: com IA" else "Comparação desligada") }
                             Opts("Estilo de cor", COLOR_STYLES, PP.colorStyle) { v -> PP.colorStyle = v; applyAiLabel(); say("Estilo: ${COLOR_STYLES[v]}") }
                             Opts("Nitidez leve", ONOFF, if (PP.aiSharp) "1" else "0") { v -> PP.aiSharp = v == "1"; ai.key = "-"; applyAi(); say("Nitidez leve: ${ONOFF[v]}") }

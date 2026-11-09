@@ -37,13 +37,13 @@ fun TmdbPanel(st: AppState, locked: Boolean) {
     Tmdb.rev.let { }
     var status by remember { mutableStateOf("") }
     var good by remember { mutableStateOf(false) }
-    T("Busca capa, imagem de fundo, sinopse, nota, gêneros, elenco e classificação indicativa dos filmes e séries da sua lista no TMDB (themoviedb.org). Precisa de uma chave grátis criada por você no site do TMDB.", 13, C.muted, lineHeight = 19)
+    T("Já vem ligado: o app busca no TMDB (themoviedb.org), em português, o nome, a capa, a imagem de fundo, a sinopse, a nota, os gêneros, o elenco, a classificação indicativa e o trailer dos filmes e séries das suas listas. Não precisa configurar nada. Se quiser, coloque uma chave sua abaixo.", 13, C.muted, lineHeight = 19)
     KV(listOf(
-        "Chave" to if (Tmdb.userKey.isNotBlank()) "sua (" + Tmdb.userKey.take(4) + "…)" else if (Tmdb.key.isNotBlank()) "padrão do app" else "não colocada",
+        "Chave" to if (Tmdb.userKey.isNotBlank()) "sua (" + Tmdb.userKey.take(4) + "…)" else if (Tmdb.key.isNotBlank()) "nativa do app" else "não colocada",
         "Situação" to if (Tmdb.on) "Ligado" else if (Tmdb.key.isBlank()) "Desligado" else "Chave recusada",
         "Títulos com capa" to "${Tmdb.count}",
     ))
-    FieldRow(st, "Chave da API", Tmdb.userKey, locked, secret = true, hint = "32 letras e números") { k ->
+    FieldRow(st, "Chave própria (opcional)", Tmdb.userKey, locked, secret = true, hint = "32 letras e números") { k ->
         status = "Testando a chave…"; good = false
         Tmdb.test(k) { msg, ok -> status = msg; good = ok; if (ok) { Tmdb.setKey(k); st.say("TMDB ligado. As capas vão aparecendo nas abas.") } }
     }
@@ -101,6 +101,7 @@ fun AiImagePanel(st: AppState, locked: Boolean) {
     }
     T("A IA observa a cena e ajusta a cor na hora: identifica pessoas, paisagem, objetos e ambiente, e realça com cores vivas mantendo os tons reais. A análise usa uma amostra pequena da imagem a cada 2 segundos, somada ao hardware da TV, por isso é instantânea. A TV ao vivo vai direto para a TV, leve e com troca de canal na hora.", 13, C.muted, lineHeight = 19)
     Opts("IA de imagem", AI_UP, if (PP.aiUp == "off") "off" else "auto", locked) { PP.aiUp = it }
+    T(ImageAi.resumoAuto() + " Se a TV perder quadros ou esquentar, a IA desce sozinha e sobe de novo quando estabiliza.", 12, C.ok, lineHeight = 17)
     KV(listOf(
         "Cena detectada agora" to if (SceneAi.on && SceneAi.scene.isNotBlank()) SceneAi.scene else "abra um filme ou série",
         "IA no chip da TV" to if (ImageAi.hwAi) "sim (${ImageAi.chip})" else "não encontrada",
@@ -124,7 +125,7 @@ fun AiImagePanel(st: AppState, locked: Boolean) {
         TogRow("Qualidade cheia na troca", "Abre filmes, episódios e canais já na maior resolução, acabando com o embaçado inicial. Se a internet engasgar, baixa sozinho.", PP.fullQuality, locked) { PP.fullQuality = it }
     }
     AiBlock("Reservado para a versão de PC") {
-        TogRow("IA pesada — upscale até 1440p + criação de quadros", "Precisa de placa de vídeo dedicada (como a RTX 3070). No aparelho de TV fica desligada para não travar.", false, locked, enabled = false) { }
+        TogRow("IA pesada — rede neural + criação de quadros", "Reconstrução por rede neural e quadros intermediários precisam de placa de vídeo dedicada (como a RTX 3070). Na TV a ampliação automática acima já usa o máximo seguro.", false, locked, enabled = false) { }
     }
     Opts("Painel da TV", PANELS, PP.panel, locked) { PP.panel = it }
     T("HVA é o painel VA da TCL: pretos profundos e alto contraste. Nesse perfil a IA segura a nitidez nas sombras (evita halos) e sobe de leve o quase-preto. Automático usa HVA em TVs TCL" + if (ImageAi.tclPanel) " (esta é uma TCL)." else ".", 11, C.dim, lineHeight = 15)

@@ -94,7 +94,13 @@ fun HomePage(st: AppState, locked: Boolean) {
             }
         }
         item { Loading() }
-        if (Catalog.items.isEmpty() && !Catalog.loading) item { Box(Modifier.padding(start = 28.dp, top = 12.dp)) { EmptySources(st, locked) } }
+        // "Comece por aqui" (quando ainda não há lista) e, ao lado direito, o balão de sugestões
+        item {
+            Row(Modifier.padding(start = 28.dp, top = 12.dp, end = 28.dp).focusGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
+                if (Catalog.items.isEmpty() && !Catalog.loading) EmptySources(st, locked)
+                SuggestBox(st, locked)
+            }
+        }
         item {
             Column(Modifier.padding(start = 28.dp, top = 10.dp)) {
                 Row(Modifier.fillMaxWidth().padding(end = 28.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -278,7 +284,8 @@ fun DetailDialog(st: AppState, it: Item) {
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     T((if (it.kind == SERIES) "SÉRIE" else "FILME") + if (it.group.isNotBlank()) " · " + it.group.uppercase() else "", 10, C.a1, FontWeight.Bold, maxLines = 1)
-                    T(it.title, 32, C.fg, FontWeight.ExtraBold, maxLines = 2, lineHeight = 34)
+                    T(tm?.name?.takeIf { n -> n.isNotBlank() } ?: it.title, 32, C.fg, FontWeight.ExtraBold, maxLines = 2, lineHeight = 34)
+                    if (!tm?.name.isNullOrBlank() && Tmdb.clean(it.title).lowercase() != tm!!.name.lowercase()) T("Título na lista: " + it.title, 11, C.muted, maxLines = 1)
                     val rate = if (it.rating.isNotBlank() && it.rating != "0") "★ ${it.rating}" else if ((tm?.vote ?: 0.0) > 0) "★ %.1f".format(tm!!.vote) else ""
                     val rt = tm?.runtime ?: 0
                     val dur = if (rt <= 0) "" else if (it.kind == SERIES) "$rt min por episódio" else if (rt >= 60) "${rt / 60}h ${"%02d".format(rt % 60)}min" else "$rt min"

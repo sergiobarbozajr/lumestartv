@@ -11,6 +11,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -248,7 +251,7 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
             st.openT = -1f
         }
         withFrameNanos { }; withFrameNanos { }
-        args.page?.let { p -> if (MENU.any { it.id == p }) st.page = p }
+        args.page?.let { p -> if (MENU.any { it.id == p }) st.page = p else if (p.startsWith("cfg:")) { st.cfgSel = p.removePrefix("cfg:"); st.page = "config" } }
         try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
         args.url?.let { u -> st.play(PlayReq("teste:" + u.hashCode(), "Teste de reprodução", u, !u.contains(".mp4"), 0L, "Teste")) }
         NewsState.load()
@@ -596,7 +599,7 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
             if (err.isNotBlank()) {
                 LaunchedEffect(Unit) { CrashLog.markSeen(ctx) }
                 T("ÚLTIMO ERRO (o app fechou sozinho)", 10, C.bad, FontWeight.Bold)
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.bg).padding(12.dp)) { T(err.lines().take(14).joinToString("\n"), 10, C.muted, lineHeight = 13) }
+                ErrBox(err, locked)
                 Btn("Apagar registro de erro", locked = locked) { CrashLog.clear(); err = "" }
             }
         }
@@ -662,20 +665,55 @@ private fun UpdatePanel(st: AppState, locked: Boolean) {
 private fun deviceInfo(ctx: Context): List<Pair<String, String>> {
     val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-    val dm = DisplayMetrics()
-    @Suppress("DEPRECATION")
-    (ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(dm)
     val tv = ctx.packageManager.hasSystemFeature("android.software.leanback")
-    return listOf(
-        "Aparelho" to "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
+    val modelo = Device.modelo(ctx)
+    val t = Device.tela(ctx)
+    return listOfNotNull(
+        "Aparelho" to "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}".trim(),
+        "Modelo" to modelo.ifBlank { "não informado pelo fabricante" },
+        Device.codigo().takeIf { it.isNotBlank() }?.let { "Código do produto" to it },
         "Tipo" to if (tv) "TV (Android TV / Google TV)" else "Celular ou tablet",
         "Android" to "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
         "Processador" to "${Runtime.getRuntime().availableProcessors()} núcleos · ${Build.HARDWARE}",
         "Memória" to "%.1f GB".format(Locale("pt", "BR"), mi.totalMem / 1073741824.0),
         "Desempenho" to Perf.reason,
-        "Tela" to "${dm.widthPixels} × ${dm.heightPixels}",
+        "Tela (painel)" to t.nome() + if (t.hz.isNotEmpty()) " · até ${t.hz.max()} Hz" else "",
+        (if (t.atualW != t.painelW || t.atualH != t.painelH) "Modo de saída" to "${t.atualW} × ${t.atualH}" else null),
+        "Interface do app" to "${t.uiW} × ${t.uiH}" + if (t.uiH < t.painelH) " (a TV amplia para a tela toda)" else "",
+        (if (t.hdr.isNotEmpty()) "HDR" to t.hdr.joinToString(", ") else null),
         "Aplicativo" to "LumeStarTV ${Updater.currentVersion(ctx)}",
     )
+}
+
+/**
+ * Caixa do erro com rolagem própria: as informações do aparelho ficam paradas e só o texto do erro
+ * sobe e desce com ▲▼. No começo do texto, ▲ sai da caixa; no fim, ▼ vai para o botão de baixo.
+ */
+@Composable
+private fun ErrBox(err: String, locked: Boolean) {
+    val sc = androidx.compose.foundation.rememberScrollState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var f by remember { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(12.dp)).background(C.bg)
+            .border(1.dp, if (f) C.a1 else Color.Transparent, RoundedCornerShape(12.dp))
+            .focusProperties { canFocus = !locked }
+            .onFocusChanged { f = it.isFocused }
+            .onPreviewKeyEvent { e ->
+                if (e.nativeKeyEvent.action != android.view.KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                when (e.nativeKeyEvent.keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (sc.value < sc.maxValue) { scope.launch { sc.animateScrollTo(minOf(sc.maxValue, sc.value + 150)) }; true } else false
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> if (sc.value > 0) { scope.launch { sc.animateScrollTo(maxOf(0, sc.value - 150)) }; true } else false
+                    else -> false
+                }
+            }
+            .focusable()
+            .verticalScroll(sc)
+            .padding(12.dp)
+    ) {
+        T(if (f) "▲▼ para rolar o texto do erro" else "Selecione esta caixa e use ▲▼ para ler o erro inteiro", 9, C.a1, FontWeight.Bold)
+        T(err, 10, C.muted, lineHeight = 13)
+    }
 }
 
 // ---------------- sair e avisos ----------------

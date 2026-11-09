@@ -19,6 +19,8 @@ class Meta(
     var genres: String = "", var cast: String = "", var runtime: Int = 0, var cert: String = "",
     /** Chave do trailer no YouTube; null = ainda não buscado, "" = não tem. */
     var trailer: String? = null,
+    /** Nome em português (pt-BR) dado pelo TMDB; vazio quando não há. */
+    var name: String = "",
 ) {
     fun posterUrl(w: Int = 342) = if (poster.isBlank()) "" else "https://image.tmdb.org/t/p/w$w$poster"
     fun backdropUrl(w: Int = 1280) = if (backdrop.isBlank()) "" else "https://image.tmdb.org/t/p/w$w$backdrop"
@@ -27,7 +29,7 @@ class Meta(
 /**
  * Capas, fundos, sinopse e nota do TMDB (themoviedb.org).
  * Busca só o que aparece na tela, um de cada vez em segundo plano, e guarda no aparelho.
- * Precisa da chave grátis do próprio usuário (Configurações › Capas e sinopses).
+ * Já vem ligado com a chave do app; o usuário pode trocar pela própria em Configurações › Capas e sinopses.
  */
 object Tmdb {
     var rev by mutableIntStateOf(0)
@@ -58,7 +60,7 @@ object Tmdb {
             try {
                 if (file.exists()) {
                     val o = JSONObject(file.readText())
-                    o.keys().forEach { k -> val m = o.getJSONObject(k); cache[k] = Meta(m.optInt("i"), m.optBoolean("tv"), m.optString("p"), m.optString("b"), m.optString("o"), m.optDouble("v", 0.0), m.optInt("y"), m.optString("g"), m.optString("c"), m.optInt("r"), m.optString("k"), if (m.has("t")) m.optString("t") else null) }
+                    o.keys().forEach { k -> val m = o.getJSONObject(k); cache[k] = Meta(m.optInt("i"), m.optBoolean("tv"), m.optString("p"), m.optString("b"), m.optString("o"), m.optDouble("v", 0.0), m.optInt("y"), m.optString("g"), m.optString("c"), m.optInt("r"), m.optString("k"), if (m.has("t")) m.optString("t") else null, m.optString("n")) }
                     main.post { rev++ }
                 }
             } catch (e: Exception) {}
@@ -113,6 +115,12 @@ object Tmdb {
 
     fun poster(it: Item): String = meta(it)?.posterUrl() ?: ""
 
+    /** Nome para mostrar: o título em português do TMDB quando já foi encontrado; senão o da lista. */
+    fun title(it: Item): String {
+        if (it.kind == LIVE || cache.isEmpty()) return it.title
+        return cache[cacheKey(it)]?.name?.takeIf { n -> n.isNotBlank() } ?: it.title
+    }
+
     private fun get(path: String): JSONObject {
         val k = useKey
         val bearer = k.length > 40
@@ -134,7 +142,8 @@ object Tmdb {
             val o = search(true) ?: if (it.year > 0) search(false) else null
             cache[k] = if (o == null) Meta(0, tv, "", "", "", 0.0, 0) else Meta(
                 o.optInt("id"), tv, o.optString("poster_path").takeIf { p -> p != "null" } ?: "", o.optString("backdrop_path").takeIf { p -> p != "null" } ?: "",
-                o.optString("overview"), o.optDouble("vote_average", 0.0), (o.optString(if (tv) "first_air_date" else "release_date").take(4).toIntOrNull() ?: 0)
+                o.optString("overview"), o.optDouble("vote_average", 0.0), (o.optString(if (tv) "first_air_date" else "release_date").take(4).toIntOrNull() ?: 0),
+                name = o.optString(if (tv) "name" else "title").takeIf { n -> n != "null" } ?: ""
             )
             dirty = true
             main.post { rev++ }
@@ -207,7 +216,7 @@ object Tmdb {
                 try {
                     dirty = false
                     val o = JSONObject()
-                    cache.forEach { (k, m) -> o.put(k, JSONObject().put("i", m.tid).put("tv", m.tv).put("p", m.poster).put("b", m.backdrop).put("o", m.overview).put("v", m.vote).put("y", m.year).put("g", m.genres).put("c", m.cast).put("r", m.runtime).put("k", m.cert).also { j -> m.trailer?.let { t -> j.put("t", t) } }) }
+                    cache.forEach { (k, m) -> o.put(k, JSONObject().put("i", m.tid).put("tv", m.tv).put("p", m.poster).put("b", m.backdrop).put("o", m.overview).put("v", m.vote).put("y", m.year).put("g", m.genres).put("c", m.cast).put("r", m.runtime).put("k", m.cert).put("n", m.name).also { j -> m.trailer?.let { t -> j.put("t", t) } }) }
                     file.writeText(o.toString())
                 } catch (e: Exception) {}
                 saving = false

@@ -236,9 +236,9 @@ private fun MCard(st: AppState, it: Item, caption: String? = null, width: Int = 
     val live = it.kind == LIVE
     Column(Modifier.width(width.dp).combinedClickable(onClick = { openItem(st, it) }, onLongClick = { menu(it) })) {
         Box(Modifier.fillMaxWidth().aspectRatio(if (live) 16f / 9f else 2f / 3f).clip(RoundedCornerShape(12.dp)).background(coverBrush(it.title))) {
-            val cover = if (live) it.logo else Tmdb.poster(it).ifBlank { it.logo }
+            val cover = if (live) it.logo.ifBlank { Logos.rev.let { _ -> Logos.find(it.title) } } else Tmdb.poster(it).ifBlank { it.logo }
             if (cover.isNotBlank()) Img(cover, 240, if (live) 135 else 360, Modifier.fillMaxSize(), crop = !live)
-            else T(it.title, 12, Color.White, FontWeight.ExtraBold, Modifier.align(Alignment.BottomStart).padding(8.dp), maxLines = 3)
+            else T(Tmdb.title(it), 12, Color.White, FontWeight.ExtraBold, Modifier.align(Alignment.BottomStart).padding(8.dp), maxLines = 3)
             Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(28.dp).clip(CircleShape).background(Color(0xB0050816)).clickable { Store.toggleFav(it.id); st.say(if (!fav) "♥ Na Minha lista" else "Removido da Minha lista") }, contentAlignment = Alignment.Center) {
                 T(if (fav) "♥" else "♡", 14, if (fav) Color(0xFFFF8FB8) else Color.White, FontWeight.Bold)
             }
@@ -247,7 +247,7 @@ private fun MCard(st: AppState, it: Item, caption: String? = null, width: Int = 
             }
             if (live && it.id in PP.offline) Box(Modifier.align(Alignment.TopStart).padding(5.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xE0B0203C)).padding(horizontal = 5.dp, vertical = 2.dp)) { T("FORA DO AR", 8, Color.White, FontWeight.Bold) }
         }
-        T(caption ?: it.title, 11, C.muted, maxLines = 1, modifier = Modifier.padding(top = 5.dp))
+        T(caption ?: Tmdb.title(it), 11, C.muted, maxLines = 1, modifier = Modifier.padding(top = 5.dp))
     }
 }
 
@@ -554,7 +554,7 @@ private fun MDetail(st: AppState, it: Item) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     T(it.group.uppercase(), 10, C.a1, FontWeight.ExtraBold, maxLines = 1)
-                    T(it.title, 24, C.fg, FontWeight.ExtraBold, lineHeight = 28)
+                    T(Tmdb.title(it), 24, C.fg, FontWeight.ExtraBold, lineHeight = 28)
                     val yr = if (it.year > 0) it.year else tm?.year ?: 0
                     val rate = if (it.rating.isNotBlank() && it.rating != "0") "★ ${it.rating}" else if ((tm?.vote ?: 0.0) > 0) "★ %.1f".format(tm!!.vote) else ""
                     val meta = listOf(if (yr > 0) "$yr" else "", tm?.cert?.takeIf { c -> c.isNotBlank() }?.let { c -> if (c == "L") "Livre" else "$c anos" } ?: "", rate,

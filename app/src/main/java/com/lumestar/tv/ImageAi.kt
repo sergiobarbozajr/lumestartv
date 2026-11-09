@@ -46,6 +46,42 @@ object ImageAi {
     /** O máximo que este aparelho aguenta, medido pelo diagnóstico (GpuProbe). */
     fun maxTier(): Int = GpuProbe.result?.maxTier ?: 1
 
+    /** Altura da camada de vídeo do app (interface) e do painel físico; definidas ao abrir o app. */
+    @Volatile var telaH = 1080
+    @Volatile var painelH = 1080
+    fun initTela(c: android.content.Context) {
+        try { val t = Device.tela(c); telaH = minOf(t.uiW, t.uiH); painelH = minOf(t.painelW, t.painelH) } catch (e: Throwable) {}
+    }
+
+    /** Placa fraca demais ou modo leve: a IA fica desligada para não travar. */
+    fun semPlaca(): Boolean = (GpuProbe.result?.ms1080 ?: 0f) >= 30f && (GpuProbe.result?.msLite ?: 0f) >= 30f
+
+    /**
+     * Resolução de saída automática. cap (disjuntor): 2 = pode ampliar, 1 = só na resolução do vídeo.
+     * Até 2160p só quando a interface do app roda em 4K e a placa sobra (estimativa ~2,25× o tempo de 1440p).
+     */
+    fun alvoAltura(cap: Int): Int {
+        if (cap < 2) return 0
+        val r = GpuProbe.result
+        val placa = when {
+            r == null -> 1080
+            r.ms1440 in 0.1f..10f && r.ms1440 * 2.25f <= 12f -> 2160
+            r.ms1440 in 0.1f..10f -> 1440
+            r.ms1080 in 0.1f..12f || r.msLite in 0.1f..12f -> 1080
+            else -> 0
+        }
+        val teto = if (telaH >= 2100) 2160 else if (telaH >= 1400) 1440 else 1080
+        return minOf(placa, teto)
+    }
+
+    /** Frase para Configurações: até onde a IA vai neste aparelho. */
+    fun resumoAuto(): String {
+        val a = alvoAltura(2)
+        if (semPlaca() || a == 0) return "Neste aparelho a IA de imagem fica desligada para não travar."
+        val tv = if (painelH > telaH + 100) " A tela é ${if (painelH >= 2100) "4K" else "${painelH}p"}: a partir daí, o chip da TV amplia para a tela toda, sem custo." else ""
+        return "Automático: vídeos menores são ampliados pela IA até ${a}p, o máximo que chega à tela e que a placa aguenta sem travar.$tv"
+    }
+
     /**
      * mode: "auto" (a IA decide), "1440", "1080" ou "off". cap: limite do disjuntor neste vídeo.
      * compare: o botão Comparar está mostrando o original.
@@ -66,18 +102,23 @@ object ImageAi {
         if (hdr) return Plan("hdr", emptyList(), if (hwAi) "IA da TV · HDR" else "HDR original", 0, 0)
         if (h <= 0) return Plan("wait", emptyList(), "", 0, 0)
         if (live) return Plan("live", emptyList(), if (hwAi) "Direto · IA da TV" else "Direto", 0, h)
-        // Na TV: sem ampliação (upscale pesado fica para a versão de PC). A IA trabalha na resolução do vídeo:
-        // nitidez leve + realce de cor por cena; o chip da TV cuida da escala e do movimento (MEMC).
+        // Automático: a IA amplia até o máximo que ainda chega à tela e que a placa aguenta sem travar.
+        // Teto da tela: a camada de vídeo do app (em muitas TVs 4K a interface roda em 1080p e o chip
+        // da própria TV amplia para 4K com melhor qualidade e sem custo). Teto da placa: o diagnóstico (GpuProbe).
         val sharp = if (PP.aiSharp) 0.4f else 0f
         val depth = if (PP.aiDepth) 0.3f else 0f
-        val tag = (if (compare) "c" else "") + sharp + depth + pn
+        val alvo = alvoAltura(cap)
+        val amplia = alvo > h + 60
+        val tag = (if (compare) "c" else "") + sharp + depth + pn + (if (amplia) alvo else 0)
         fun fxNative() = listOf(AiSharpen(0, sharp, 0.3f, true, depth, sp, pn))
+        fun fx() = if (amplia) listOf(AiSharpen(alvo, sharp, 0.3f, (GpuProbe.result?.ms1080 ?: 99f) > 12f, depth, sp, pn)) else fxNative()
         if (mode == "off") return if (compare) Plan("off$tag", fxNative(), "Comparando: original | IA", 0, h) else Plan("off", emptyList(), "", 0, 0)
-        val src = "${h}p"
         val chipTv = if (hwAi) " + IA da TV" else ""
         val style = when (PP.colorStyle) { "vivido" -> "Vívido"; "cinema" -> "Cinema"; else -> "Fiel" }
-        val p = if (cap <= 0) Plan("none", emptyList(), "IA pausada (TV no limite)$chipTv", 0, h)
-        else Plan("scene$tag", fxNative(), "IA $style · $src$chipTv", 1, h)
+        val res = if (amplia) "${h}p→${alvo}p" else "${h}p"
+        val tvAmplia = if (painelH > telaH + 100 && (if (amplia) alvo else h) <= telaH) " · TV amplia p/ ${if (painelH >= 2100) "4K" else "${painelH}p"}" else ""
+        val p = if (cap <= 0 || semPlaca()) Plan("none", emptyList(), (if (semPlaca()) "IA desligada (modo leve)" else "IA pausada (TV no limite)") + chipTv, 0, h)
+        else Plan("scene$tag", fx(), "IA $style · $res$tvAmplia$chipTv", if (amplia) 2 else 1, if (amplia) alvo else h)
         return if (compare && p.effects.isEmpty()) Plan("cmp$tag", fxNative(), "Comparando: original | IA", p.tier, h)
         else if (compare) Plan(p.key, p.effects, "Comparando: original | " + p.label, p.tier, p.outH) else p
     }

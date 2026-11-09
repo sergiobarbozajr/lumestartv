@@ -100,12 +100,12 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
             Modifier.fillMaxWidth().height(h).clip(RoundedCornerShape(10.dp)).background(coverBrush(it.title))
                 .border(if (f) 2.dp else 0.dp, if (f) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
         ) {
-            if (!wide || it.logo.isBlank()) Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Bottom) {
+            if (!wide || (it.logo.isBlank() && Logos.find(it.title).isBlank())) Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Bottom) {
                 T(if (it.kind == LIVE) "CANAL" else if (it.kind == SERIES) "SÉRIE" else "FILME", 8, Color.White.copy(alpha = .7f), FontWeight.Bold)
-                T(it.title, 11, Color.White, FontWeight.Bold, maxLines = 3, lineHeight = 13)
+                T(Tmdb.title(it), 11, Color.White, FontWeight.Bold, maxLines = 3, lineHeight = 13)
             }
             Tmdb.rev.let { }
-            val cover = if (it.kind == LIVE) it.logo else Tmdb.poster(it).ifBlank { it.logo }
+            val cover = if (it.kind == LIVE) it.logo.ifBlank { Logos.rev.let { _ -> Logos.find(it.title) } } else Tmdb.poster(it).ifBlank { it.logo }
             Img(cover, if (wide) 336 else 212, if (wide) 190 else 316, Modifier.fillMaxSize().let { m -> if (wide) m.padding(12.dp) else m }, crop = !wide)
             if (it.kind == LIVE && it.id in PP.offline) Box(Modifier.align(Alignment.TopStart).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xE0B0203C)).padding(horizontal = 6.dp, vertical = 2.dp)) { T("FORA DO AR", 8, Color.White, FontWeight.Bold) }
             if (fav) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(20.dp).clip(CircleShape).background(Color(0xC8050816)), contentAlignment = Alignment.Center) { T("♥", 11, Color(0xFFFF8FB8), FontWeight.Bold) }
@@ -114,7 +114,7 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
             }
             if (f) Box(Modifier.matchParentSize().border(2.dp, C.a1, RoundedCornerShape(10.dp)))
         }
-        T(caption ?: if (wide) it.title else listOf(it.group, if (it.year > 0) it.year.toString() else "").filter { it.isNotBlank() }.joinToString(" · "), 10, if (f) C.fg else C.muted, maxLines = 1)
+        T(caption ?: if (wide) Tmdb.title(it) else listOf(it.group, if (it.year > 0) it.year.toString() else "").filter { it.isNotBlank() }.joinToString(" · "), 10, if (f) C.fg else C.muted, maxLines = 1)
     }
 }
 
@@ -193,9 +193,9 @@ fun heroFrom(items: List<Item>, n: Int = 6): List<HeroEntry> {
 }
 
 fun heroOf(it: Item) = HeroEntry(
-    it.title, listOf(if (it.kind == LIVE) "Ao vivo" else if (it.kind == SERIES) "Série" else "Filme", it.group).filter { s -> s.isNotBlank() }.joinToString(" · "),
+    Tmdb.title(it), listOf(if (it.kind == LIVE) "Ao vivo" else if (it.kind == SERIES) "Série" else "Filme", it.group).filter { s -> s.isNotBlank() }.joinToString(" · "),
     listOf(if (it.year > 0) it.year.toString() else "", if (it.rating.isNotBlank() && it.rating != "0") "★ ${it.rating}" else "", if (it.year == Catalog.year) "LANÇAMENTO" else "").filter { s -> s.isNotBlank() }.joinToString(" · "),
-    it.plot, it.logo, it, null
+    it.plot, if (it.kind == LIVE) it.logo.ifBlank { Logos.find(it.title) } else it.logo, it, null
 )
 
 /** Cartão de notícia com leitura resumida. */
@@ -249,4 +249,71 @@ fun EmptySources(st: AppState, locked: Boolean) {
             Btn("Listas e enviar pelo celular", locked = locked) { st.cfgSel = "listas"; st.page = "config"; st.refocus++ }
         }
     }
+}
+
+/** Sugestões do Início: (texto, atalho em Configurações). */
+private val SUGESTOES = listOf(
+    "Melhore a imagem: a IA amplia filmes e séries até o máximo que a sua TV aguenta, sem travar." to "ai",
+    "Limpe o histórico do que já assistiu e do Continuar assistindo." to "historico",
+    "Proteja o conteúdo adulto com um PIN." to "adulto",
+    "Mude o tema do app ou use uma imagem sua como fundo." to "tema",
+    "Ajuste o som dos vídeos: diálogos nítidos, cinema ou modo noturno." to "audio",
+    "Salve até 5 sites para abrir direto do app." to "web",
+    "Adicione listas M3U, JSON ou TXT. Dá para enviar pelo celular." to "listas",
+    "Conecte até 3 contas IPTV." to "contas",
+    "Escolha sua cidade para ver o clima no topo da tela." to "clima",
+    "Ligue, desligue ou ajuste os sons de navegação do app." to "som",
+)
+
+/**
+ * Balão de sugestões: troca sozinho a cada 10 s; parado enquanto está selecionado.
+ * ◀ ▶ passam para a anterior/próxima e OK no texto abre a configuração da sugestão.
+ */
+@Composable
+fun SuggestBox(st: AppState, locked: Boolean, modifier: Modifier = Modifier) {
+    var i by remember { mutableIntStateOf(0) }
+    var focos by remember { mutableIntStateOf(0) } // quantas partes do balão estão com foco
+    LaunchedEffect(focos) {
+        while (focos == 0) { kotlinx.coroutines.delay(10_000); if (focos == 0) i = (i + 1) % SUGESTOES.size }
+    }
+    val (texto, cfg) = SUGESTOES[i]
+    Column(
+        modifier.width(380.dp).clip(RoundedCornerShape(16.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(16.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("SUGESTÕES", 10, C.a1, FontWeight.Bold, modifier = Modifier.weight(1f))
+            T("${i + 1} de ${SUGESTOES.size}" + if (focos > 0) " · parado" else "", 10, C.dim)
+        }
+        var f by remember { mutableStateOf(false) }
+        Box(
+            Modifier.fillMaxWidth().height(86.dp).clip(RoundedCornerShape(12.dp)).background(if (f) C.panel2 else C.bg.copy(alpha = .5f))
+                .border(1.dp, if (f) C.a1 else Color.Transparent, RoundedCornerShape(12.dp))
+                .focusProperties { canFocus = !locked }
+                .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); if (n != f) focos += if (n) 1 else -1; f = n }
+                .clickable(remember { MutableInteractionSource() }, null) { Sfx.ok(); st.cfgSel = cfg; st.page = "config"; st.refocus++ }
+                .padding(12.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                T(texto, 13, C.fg, FontWeight.SemiBold, maxLines = 3, lineHeight = 18)
+                T(if (f) "OK para abrir esta configuração" else "Configurações › " + (cfgName(cfg) ?: ""), 10, if (f) C.a1 else C.muted, maxLines = 1)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            SetaBtn("◀ Anterior", locked, { n -> focos += if (n) 1 else -1 }) { i = (i - 1 + SUGESTOES.size) % SUGESTOES.size }
+            SetaBtn("Próxima ▶", locked, { n -> focos += if (n) 1 else -1 }) { i = (i + 1) % SUGESTOES.size }
+        }
+    }
+}
+
+@Composable
+private fun SetaBtn(label: String, locked: Boolean, onFoco: (Boolean) -> Unit, onClick: () -> Unit) {
+    var f by remember { mutableStateOf(false) }
+    Box(
+        Modifier.clip(RoundedCornerShape(10.dp)).background(if (f) C.fg else C.panel2)
+            .focusProperties { canFocus = !locked }
+            .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); if (n != f) onFoco(n); f = n }
+            .clickable(remember { MutableInteractionSource() }, null) { Sfx.ok(); onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) { T(label, 12, if (f) Color(0xFF050816) else C.fg, FontWeight.SemiBold, maxLines = 1) }
 }
