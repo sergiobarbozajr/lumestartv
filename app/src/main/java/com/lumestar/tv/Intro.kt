@@ -342,7 +342,8 @@ private fun drawIntro(c: Canvas, plan: IntroPlan, text: Paint, t: Float, W: Floa
         val R = 720 * .12f * s * e * shr
         val spin = 1 + (if (t > 3.6f) (t - 3.6f) * 7 else 0f)
         Space.blackHole(c, cx, cy, R, t, spin, s)
-        for (b in plan.bolts) {
+        // raios elétricos tirados a pedido (a entrada fica só com o buraco negro e o disco)
+        if (false) for (b in plan.bolts) {
             val age = t - b.t.toFloat()
             if (age < 0 || age > b.life) continue
             val a = 1 - age / b.life.toFloat()
