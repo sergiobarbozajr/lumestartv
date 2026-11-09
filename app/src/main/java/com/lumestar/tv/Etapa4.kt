@@ -13,6 +13,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,29 +55,31 @@ import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
 // ---------------- apps de streaming e de música ----------------
-class TvApp(val name: String, val pkgs: List<String>, val note: String)
+class TvApp(val name: String, val pkgs: List<String>, val note: String, val site: String = "")
 
 val STREAM_APPS = listOf(
-    TvApp("Netflix", listOf("com.netflix.ninja", "com.netflix.mediaclient"), "Filmes e séries"),
-    TvApp("Prime Video", listOf("com.amazon.amazonvideo.livingroom", "com.amazon.avod.thirdpartyclient"), "Amazon"),
-    TvApp("Disney+", listOf("com.disney.disneyplus"), "Disney, Marvel, Star Wars"),
-    TvApp("Max", listOf("com.wbd.stream", "com.hbo.hbonow"), "HBO e Warner"),
-    TvApp("Globoplay", listOf("com.globo.globotv"), "Novelas e Globo ao vivo"),
-    TvApp("Apple TV", listOf("com.apple.atve.androidtv.appletv"), "Apple TV+"),
-    TvApp("Paramount+", listOf("com.cbs.ott"), "Filmes e esportes"),
-    TvApp("YouTube", listOf("com.google.android.youtube.tv", "com.google.android.youtube"), "Vídeos"),
-    TvApp("Pluto TV", listOf("tv.pluto.android"), "Canais grátis"),
-    TvApp("Crunchyroll", listOf("com.crunchyroll.crunchyroid"), "Animes"),
-    TvApp("Plex", listOf("com.plexapp.android"), "Seus vídeos"),
+    TvApp("Netflix", listOf("com.netflix.ninja", "com.netflix.mediaclient"), "Filmes e séries", "netflix.com"),
+    TvApp("Prime Video", listOf("com.amazon.amazonvideo.livingroom", "com.amazon.avod.thirdpartyclient"), "Amazon", "primevideo.com"),
+    TvApp("Disney+", listOf("com.disney.disneyplus"), "Disney, Marvel, Star Wars", "disneyplus.com"),
+    TvApp("Max", listOf("com.wbd.stream", "com.hbo.hbonow"), "HBO e Warner", "max.com"),
+    TvApp("Globoplay", listOf("com.globo.globotv"), "Novelas e Globo ao vivo", "globoplay.globo.com"),
+    TvApp("Apple TV", listOf("com.apple.atve.androidtv.appletv"), "Apple TV+", "tv.apple.com"),
+    TvApp("Paramount+", listOf("com.cbs.ott"), "Filmes e esportes", "paramountplus.com"),
+    TvApp("YouTube", listOf("com.google.android.youtube.tv", "com.google.android.youtube"), "Vídeos", "youtube.com"),
+    TvApp("Pluto TV", listOf("tv.pluto.android"), "Canais grátis", "pluto.tv"),
+    TvApp("Crunchyroll", listOf("com.crunchyroll.crunchyroid"), "Animes", "crunchyroll.com"),
+    TvApp("Plex", listOf("com.plexapp.android"), "Seus vídeos", "plex.tv"),
+    TvApp("Google TV", listOf("com.google.android.videos"), "Filmes comprados e alugados", "tv.google"),
+    TvApp("Mercado Play", listOf("com.mercadolibre.play", "com.mercadolibre"), "Grátis com anúncios", "mercadolivre.com.br"),
 )
 
 val MUSIC_APPS = listOf(
-    TvApp("Spotify", listOf("com.spotify.tv.android", "com.spotify.music"), "Músicas e podcasts"),
-    TvApp("YouTube Music", listOf("com.google.android.youtube.tvmusic", "com.google.android.apps.youtube.music"), "Clipes e músicas"),
-    TvApp("Deezer", listOf("deezer.android.tv", "deezer.android.app"), "Músicas"),
-    TvApp("Amazon Music", listOf("com.amazon.music.tv", "com.amazon.mp3"), "Músicas"),
-    TvApp("TIDAL", listOf("com.aspiro.tidal"), "Alta fidelidade"),
-    TvApp("TuneIn", listOf("tunein.player"), "Rádios do mundo"),
+    TvApp("Spotify", listOf("com.spotify.tv.android", "com.spotify.music"), "Músicas e podcasts", "spotify.com"),
+    TvApp("YouTube Music", listOf("com.google.android.youtube.tvmusic", "com.google.android.apps.youtube.music"), "Clipes e músicas", "music.youtube.com"),
+    TvApp("Deezer", listOf("deezer.android.tv", "deezer.android.app"), "Músicas", "deezer.com"),
+    TvApp("Amazon Music", listOf("com.amazon.music.tv", "com.amazon.mp3"), "Músicas", "music.amazon.com"),
+    TvApp("TIDAL", listOf("com.aspiro.tidal"), "Alta fidelidade", "tidal.com"),
+    TvApp("TuneIn", listOf("tunein.player"), "Rádios do mundo", "tunein.com"),
 )
 
 fun appIntent(c: Context, a: TvApp): Intent? = a.pkgs.firstNotNullOfOrNull { p ->
@@ -92,24 +98,59 @@ fun openApp(c: Context, st: AppState, a: TvApp) {
 fun AppTile(st: AppState, a: TvApp, locked: Boolean) {
     val ctx = LocalContext.current
     val installed = remember(a) { appIntent(ctx, a) != null }
+    // logo oficial: o banner/ícone que o próprio app instalado entrega ao Android; se não estiver instalado, o ícone do site da marca
+    val banner = remember(a) { appArte(ctx, a) }
     var f by remember { mutableStateOf(false) }
-    Column(
+    Box(
         Modifier.width(160.dp).height(96.dp)
             .graphicsLayer { val k = if (f) 1.06f else 1f; scaleX = k; scaleY = k }
+            .shadow(if (f) 16.dp else 0.dp, RoundedCornerShape(14.dp), ambientColor = C.a1, spotColor = C.a1)
             .clip(RoundedCornerShape(14.dp)).background(coverBrush(a.name))
             .border(if (f) 2.dp else 0.dp, if (f) Color.White else Color.Transparent, RoundedCornerShape(14.dp))
             .focusProperties { canFocus = !locked }
             .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); f = n }
             .clickable(remember { MutableInteractionSource() }, null) { Sfx.ok(); openApp(ctx, st, a) }
-            .padding(12.dp),
-        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        T(a.name, 16, Color.White, FontWeight.ExtraBold, maxLines = 1)
-        Column {
-            T(a.note, 10, Color.White.copy(alpha = .75f), maxLines = 1)
-            T(if (installed) "▶ Abrir" else "⬇ Instalar na Play Store", 11, if (installed) Color.White else Color(0xFFFFE08A), FontWeight.Bold, maxLines = 1)
+        if (banner != null && banner.second) {
+            // banner de TV (16:9): ocupa o card inteiro, como na tela inicial da TV
+            androidx.compose.foundation.Image(banner.first, a.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000)))).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                T(if (f) "▶ Abrir" else a.name, 10, Color.White, FontWeight.Bold, maxLines = 1)
+            }
+        } else {
+            Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = .92f)).padding(4.dp), contentAlignment = Alignment.Center) {
+                        if (banner != null) androidx.compose.foundation.Image(banner.first, a.name, Modifier.fillMaxSize())
+                        else if (a.site.isNotBlank()) Img("https://www.google.com/s2/favicons?domain=${a.site}&sz=128", 96, 96, Modifier.fillMaxSize(), crop = false)
+                    }
+                    T(a.name, 14, Color.White, FontWeight.ExtraBold, maxLines = 1)
+                }
+                Column {
+                    T(a.note, 10, Color.White.copy(alpha = .75f), maxLines = 1)
+                    T(if (installed) "▶ Abrir" else "⬇ Instalar na Play Store", 11, if (installed) Color.White else Color(0xFFFFE08A), FontWeight.Bold, maxLines = 1)
+                }
+            }
         }
+        if (f) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.linearGradient(0f to Color.White.copy(alpha = .22f), .45f to Color.Transparent)))
     }
+}
+
+/** Arte oficial do app instalado: (imagem, éBannerDeTV). Banner de TV quando existe; senão o ícone. */
+fun appArte(c: Context, a: TvApp): Pair<androidx.compose.ui.graphics.ImageBitmap, Boolean>? {
+    val pm = c.packageManager
+    for (p in a.pkgs) {
+        try {
+            val info = pm.getApplicationInfo(p, 0)
+            val ban = try { pm.getApplicationBanner(info) } catch (e: Throwable) { null }
+            val d = ban ?: pm.getApplicationIcon(info)
+            val w = if (ban != null) 320 else 128; val h = if (ban != null) 180 else 128
+            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            val cv = android.graphics.Canvas(bmp); d.setBounds(0, 0, w, h); d.draw(cv)
+            return bmp.asImageBitmap() to (ban != null)
+        } catch (e: Throwable) {}
+    }
+    return null
 }
 
 @Composable

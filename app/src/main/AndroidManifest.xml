@@ -41,6 +41,9 @@
         <package android:name="com.aspiro.tidal" />
         <package android:name="com.apple.android.music" />
         <package android:name="tunein.player" />
+        <package android:name="com.google.android.videos" />
+        <package android:name="com.mercadolibre.play" />
+        <package android:name="com.mercadolibre" />
         <package android:name="com.netflix.mediaclient" />
         <package android:name="com.disney.disneyplus" />
         <package android:name="com.amazon.avod.thirdpartyclient" />
