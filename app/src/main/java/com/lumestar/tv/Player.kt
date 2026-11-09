@@ -465,6 +465,15 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             (ctx as? android.app.Activity)?.window?.let { w -> if (w.attributes.preferredDisplayModeId != 0) w.attributes = w.attributes.also { it.preferredDisplayModeId = 0 } }
         }
     }
+    // Ao sair do app (Home, outro app), vídeo e canal PARAM o som; só a rádio continua tocando em segundo plano.
+    val ciclo = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(ciclo) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_STOP) { save(); player.pause() }
+        }
+        ciclo.lifecycle.addObserver(obs)
+        onDispose { ciclo.lifecycle.removeObserver(obs) }
+    }
     LaunchedEffect(Unit) { PlayerDiag.rebuffers = 0; PlayerDiag.lastTitle = req.title; SceneAi.reset(!req.live && PP.aiUp != "off") }
     LaunchedEffect(url, attempt, subUrl, audioUrl) { eng.load(url, subUrl, audioUrl, if (req.live) 0L else startAt) }
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }

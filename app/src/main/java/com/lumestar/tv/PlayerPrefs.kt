@@ -52,6 +52,9 @@ object PP {
     var quality by StrP("qualidade", "auto")
     var aiUp by StrP("reforcoIa", "auto")      // auto | 1440 | 1080 | off
     var matchHz by BoolP("frequenciaTela", true)   // "Suavização 100 Hz": entrega a cadência certa para o MEMC da TV
+    var radioCidade by StrP("radioCidade", "")        // "Macaé, Rio de Janeiro"
+    var radioEstado by StrP("radioEstado", "")
+    var radioPos by StrP("radioPos", "")              // "lat,lon"
     var videoMode by StrP("videoDireto", "auto")   // auto | direto | classico
     var diretoFalhou by BoolP("diretoFalhou", false)
     var testeRes by StrP("testeDesempenho", "")

@@ -113,7 +113,7 @@ private val MTAB_ICON = mapOf("inicio" to "home", "aovivo" to "live", "filmes" t
 private val MORE = listOf(
     Triple("lista", "Minha lista", "heart"), Triple("lancamentos", "Lançamentos", "spark"), Triple("novelas", "Novelas", "novela"),
     Triple("infantil", "Infantil", "kid"), Triple("documentarios", "Documentários", "globe"), Triple("esportes", "Esportes", "ball"),
-    Triple("noticias", "Notícias", "news"), Triple("musicas", "Músicas", "music"), Triple("streaming", "Streaming", "grid"),
+    Triple("noticias", "Notícias", "news"), Triple("musicas", "Músicas", "music"), Triple("radio", "Rádio", "radio"), Triple("streaming", "Streaming", "grid"),
     Triple("assistente", "Assistente", "bot"), Triple("config", "Configurações", "gear"),
 )
 
@@ -237,8 +237,9 @@ private fun MCard(st: AppState, it: Item, caption: String? = null, width: Int = 
     Column(Modifier.width(width.dp).combinedClickable(onClick = { openItem(st, it) }, onLongClick = { menu(it) })) {
         Box(Modifier.fillMaxWidth().aspectRatio(if (live) 16f / 9f else 2f / 3f).clip(RoundedCornerShape(12.dp)).background(coverBrush(it.title))) {
             val cover = if (live) it.logo.ifBlank { Logos.rev.let { _ -> Logos.find(it.title) } } else Tmdb.poster(it).ifBlank { it.logo }
-            if (cover.isNotBlank()) Img(cover, 240, if (live) 135 else 360, Modifier.fillMaxSize(), crop = !live)
-            else T(Tmdb.title(it), 12, Color.White, FontWeight.ExtraBold, Modifier.align(Alignment.BottomStart).padding(8.dp), maxLines = 3)
+            if (live) LogoArte(it.title, cover, Modifier.fillMaxSize(), pad = 8.dp, tamanhoNome = 15)
+            else if (cover.isNotBlank()) Img(cover, 240, 360, Modifier.fillMaxSize(), crop = true)
+            else NomeArte(Tmdb.title(it), 14)
             Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(28.dp).clip(CircleShape).background(Color(0xB0050816)).clickable { Store.toggleFav(it.id); st.say(if (!fav) "♥ Na Minha lista" else "Removido da Minha lista") }, contentAlignment = Alignment.Center) {
                 T(if (fav) "♥" else "♡", 14, if (fav) Color(0xFFFF8FB8) else Color.White, FontWeight.Bold)
             }
@@ -468,6 +469,7 @@ private fun MPage(st: AppState, pg: String, back: () -> Unit, go: (String) -> Un
         pg == "lista" -> { val l = Store.favs.mapNotNull { itemFor(it) }; if (l.isEmpty()) T("Toque no ♡ de um título, ou segure o dedo sobre ele, para guardar aqui.", 13, C.muted, modifier = Modifier.padding(16.dp)) else MGrid(st, l, setMenu) }
         pg == "lancamentos" -> MGrid(st, Catalog.releases(), setMenu)
         pg == "noticias" -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(NewsState.list) { n -> MNewsCard(st, n, 0) } }
+        pg == "radio" -> Box(Modifier.fillMaxSize()) { RadioPage(st, false) }
         pg == "musicas" -> MSection(st, "musicas") { Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { MUSIC_APPS.forEach { AppTile(st, it, false) } } }
         pg == "streaming" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             T("Abre o app oficial de cada serviço instalado no celular. Os que faltam abrem na Play Store.", 13, C.muted, lineHeight = 19)

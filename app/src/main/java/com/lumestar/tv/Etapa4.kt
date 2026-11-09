@@ -117,22 +117,25 @@ fun AppTile(st: AppState, a: TvApp, locked: Boolean) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000)))).padding(horizontal = 10.dp, vertical = 5.dp)) {
                 T(if (f) "▶ Abrir" else a.name, 10, Color.White, FontWeight.Bold, maxLines = 1)
             }
-        } else {
-            Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = .92f)).padding(4.dp), contentAlignment = Alignment.Center) {
-                        if (banner != null) androidx.compose.foundation.Image(banner.first, a.name, Modifier.fillMaxSize())
-                        else if (a.site.isNotBlank()) Img("https://www.google.com/s2/favicons?domain=${a.site}&sz=128", 96, 96, Modifier.fillMaxSize(), crop = false)
-                    }
-                    T(a.name, 14, Color.White, FontWeight.ExtraBold, maxLines = 1)
-                }
-                Column {
-                    T(a.note, 10, Color.White.copy(alpha = .75f), maxLines = 1)
-                    T(if (installed) "▶ Abrir" else "⬇ Instalar na Play Store", 11, if (installed) Color.White else Color(0xFFFFE08A), FontWeight.Bold, maxLines = 1)
-                }
+        } else if (banner != null) {
+            // app instalado sem banner de TV: o ícone oficial grande, fundo na cor dele
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color.White.copy(alpha = .14f), Color.Transparent))), contentAlignment = Alignment.Center) {
+                androidx.compose.foundation.Image(banner.first, a.name, Modifier.size(58.dp).clip(RoundedCornerShape(12.dp)))
             }
+            Rodape(a, installed, f)
+        } else {
+            // não instalado: ícone oficial do site da marca ocupando o card, fundo na cor dele
+            LogoArte(a.name, if (a.site.isNotBlank()) "https://www.google.com/s2/favicons?domain=${a.site}&sz=256" else "", Modifier.fillMaxSize().padding(bottom = 20.dp), pad = 14.dp, tamanhoNome = 20)
+            Rodape(a, installed, f)
         }
         if (f) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.linearGradient(0f to Color.White.copy(alpha = .22f), .45f to Color.Transparent)))
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.Rodape(a: TvApp, installed: Boolean, f: Boolean) {
+    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)))).padding(horizontal = 10.dp, vertical = 4.dp)) {
+        T(if (f) (if (installed) "▶ Abrir " + a.name else "⬇ Instalar " + a.name) else a.name + " · " + a.note, 10, if (installed || !f) Color.White else Color(0xFFFFE08A), FontWeight.Bold, maxLines = 1)
     }
 }
 

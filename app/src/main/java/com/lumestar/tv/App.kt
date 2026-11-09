@@ -101,7 +101,8 @@ private val IC = mapOf(
     "novela" to "M4 5h16v11H9l-5 4z",
     "kid" to "M12 3a5 5 0 0 1 5 5c0 4-5 7-5 7s-5-3-5-7a5 5 0 0 1 5-5zM12 15l-1 2h2l-1 2v2",
     "globe" to "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18",
-    "ball" to "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7.5l4 3-1.5 4.5h-5L8 10.5z",
+    "ball" to "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 3v18M3 12h18M5.6 5.6c2.7 2.5 2.7 10.3 0 12.8M18.4 5.6c-2.7 2.5-2.7 10.3 0 12.8",
+    "radio" to "M4 9h16v11H4zM7 9l10-5M6 14.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0zM13 13h4M13 16h4",
     "news" to "M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7",
     "music" to "M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0zM20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z",
     "bot" to "M12 3v3M7 7h10a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3zM9 12h.01M15 12h.01M9.5 15.5h5",
@@ -124,6 +125,7 @@ val MENU = listOf(
     Nav("esportes", "Esportes", "ball", "Fileiras por categoria, em ordem alfabética.", "Chega na entrega 2."),
     Nav("noticias", "Notícias", "news", "Telejornais e leitura resumida: mercado, futebol, tecnologia, investimentos, nacional e internacional.", "Chega na entrega 2."),
     Nav("musicas", "Músicas", "music", "Seus apps de música e as rádios da sua lista.", "Chega na entrega 4."),
+    Nav("radio", "Rádio", "radio", "Rádios online da cidade que você escolher, tocando até fora do app.", ""),
     Nav("assistente", "Assistente IA", "bot", "Diagnóstico e ajuda: canal travando, teste de internet, imagem, som e legendas.", "Chega na entrega 4 (IA no aparelho para diagnóstico e na nuvem para conversa)."),
     Nav("config", "Configurações", "gear", "", ""),
 )
@@ -192,7 +194,7 @@ class AppState(val prefs: Prefs) {
     var focusTarget by mutableStateOf<FocusRequester?>(null)
     var focusTick by mutableIntStateOf(0)
     fun focusLater(r: FocusRequester) { focusTarget = r; focusTick++ }
-    fun play(r: PlayReq) { pendingOpen?.cancel(); player = r }
+    fun play(r: PlayReq) { pendingOpen?.cancel(); try { Radio.parar() } catch (e: Throwable) {}; player = r }
     fun closePlayer() { player = null; refocus++ }
     val overlay get() = detail != null || player != null || kb != null || newsOpen != null || exitAsk
 }
@@ -423,6 +425,7 @@ private fun Page(st: AppState, locked: Boolean) {
                 "lista" -> MyListPage(st, locked)
                 "lancamentos" -> ReleasesPage(st, locked)
                 "aovivo" -> TabPage(st, "aovivo", "TV ao vivo", n.desc, locked, hero = true)
+                "radio" -> RadioPage(st, locked)
                 "musicas" -> TabPage(st, "musicas", "Músicas", "Rádios e canais de música da sua lista, e os seus apps de música.", locked, hero = false, top = { MusicApps(st, locked) })
                 "streaming" -> StreamingPage(st, locked)
                 "assistente" -> AssistantPage(st, locked)
@@ -600,7 +603,7 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
         "listas" -> ListsPanel(st, locked)
         "adulto" -> AdultPanel(st, locked)
         "sobre" -> {
-            KV(deviceInfo(ctx))
+            RolaBox(230, locked, "todas as informações") { KVPequeno(deviceInfo(ctx)) }
             var env by remember { mutableStateOf(PP.enviarErros) }
             Seg("Enviar relatório de erros automaticamente", listOf(1 to "Ligado", 0 to "Desligado"), if (env) 1 else 0, locked) { env = it == 1; PP.enviarErros = env }
             T("Quando o app fecha sozinho, um resumo técnico vai para o desenvolvedor corrigir. Não leva endereço de lista, usuário, senha nem o que você assiste.", 11, C.dim, lineHeight = 15)
@@ -702,20 +705,24 @@ private fun deviceInfo(ctx: Context): List<Pair<String, String>> {
  * sobe e desce com ▲▼. No começo do texto, ▲ sai da caixa; no fim, ▼ vai para o botão de baixo.
  */
 @Composable
-private fun ErrBox(err: String, locked: Boolean) {
+private fun ErrBox(err: String, locked: Boolean) = RolaBox(190, locked, "o erro inteiro") { T(err, 10, C.muted, lineHeight = 13) }
+
+/** Caixa com rolagem própria: selecione e use ▲▼. No começo, ▲ sai da caixa; no fim, ▼ vai para o item de baixo. */
+@Composable
+fun RolaBox(altura: Int, locked: Boolean, oQue: String, content: @Composable () -> Unit) {
     val sc = androidx.compose.foundation.rememberScrollState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var f by remember { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(12.dp)).background(C.bg)
+        Modifier.fillMaxWidth().height(altura.dp).clip(RoundedCornerShape(12.dp)).background(C.bg)
             .border(1.dp, if (f) C.a1 else Color.Transparent, RoundedCornerShape(12.dp))
             .focusProperties { canFocus = !locked }
             .onFocusChanged { f = it.isFocused }
             .onPreviewKeyEvent { e ->
                 if (e.nativeKeyEvent.action != android.view.KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
                 when (e.nativeKeyEvent.keyCode) {
-                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (sc.value < sc.maxValue) { scope.launch { sc.animateScrollTo(minOf(sc.maxValue, sc.value + 150)) }; true } else false
-                    android.view.KeyEvent.KEYCODE_DPAD_UP -> if (sc.value > 0) { scope.launch { sc.animateScrollTo(maxOf(0, sc.value - 150)) }; true } else false
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (sc.value < sc.maxValue) { scope.launch { sc.animateScrollTo(minOf(sc.maxValue, sc.value + 120)) }; true } else false
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> if (sc.value > 0) { scope.launch { sc.animateScrollTo(maxOf(0, sc.value - 120)) }; true } else false
                     else -> false
                 }
             }
@@ -723,8 +730,16 @@ private fun ErrBox(err: String, locked: Boolean) {
             .verticalScroll(sc)
             .padding(12.dp)
     ) {
-        T(if (f) "▲▼ para rolar o texto do erro" else "Selecione esta caixa e use ▲▼ para ler o erro inteiro", 9, C.a1, FontWeight.Bold)
-        T(err, 10, C.muted, lineHeight = 13)
+        if (sc.maxValue > 0) T(if (f) "▲▼ para rolar" else "Selecione e use ▲▼ para ver $oQue", 9, C.a1, FontWeight.Bold)
+        content()
+    }
+}
+
+/** Tabela compacta (letra menor) para caber mais informação. */
+@Composable
+fun KVPequeno(rows: List<Pair<String, String>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        rows.forEach { (k, v) -> Row { T(k, 11, C.muted, modifier = Modifier.width(150.dp)); T(v, 11, C.fg, FontWeight.SemiBold) } }
     }
 }
 

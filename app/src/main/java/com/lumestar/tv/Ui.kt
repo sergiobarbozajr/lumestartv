@@ -104,15 +104,19 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
                 .clip(RoundedCornerShape(10.dp)).background(coverBrush(it.title))
                 .border(if (f) 2.dp else 0.dp, if (f) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
         ) {
-            // logo de canal selecionado: halo de luz atrás do logo
-            if (f && wide) Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(C.a1.copy(alpha = .38f), Color.Transparent))))
-            if (!wide || (it.logo.isBlank() && Logos.find(it.title).isBlank())) Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Bottom) {
-                T(if (it.kind == LIVE) "CANAL" else if (it.kind == SERIES) "SÉRIE" else "FILME", 8, Color.White.copy(alpha = .7f), FontWeight.Bold)
-                T(Tmdb.title(it), 11, Color.White, FontWeight.Bold, maxLines = 3, lineHeight = 13)
-            }
+
             Tmdb.rev.let { }
             val cover = if (it.kind == LIVE) it.logo.ifBlank { Logos.rev.let { _ -> Logos.find(it.title) } } else Tmdb.poster(it).ifBlank { it.logo }
-            Img(cover, if (wide) 336 else 212, if (wide) 190 else 316, Modifier.fillMaxSize().let { m -> if (wide) m.padding(12.dp) else m }, crop = !wide)
+            if (wide) {
+                // canal: logo ocupando o card, fundo na cor do logo; sem logo, um logo desenhado com o nome
+                LogoArte(it.title, cover, Modifier.fillMaxSize(), pad = 10.dp, tamanhoNome = 17)
+            } else {
+                if (cover.isBlank()) Box(Modifier.fillMaxSize()) {
+                    NomeArte(Tmdb.title(it), 15)
+                    T(if (it.kind == SERIES) "SÉRIE" else "FILME", 8, Color.White.copy(alpha = .7f), FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(8.dp))
+                }
+                Img(cover, 212, 316, Modifier.fillMaxSize(), crop = true)
+            }
             if (it.kind == LIVE && it.id in PP.offline) Box(Modifier.align(Alignment.TopStart).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xE0B0203C)).padding(horizontal = 6.dp, vertical = 2.dp)) { T("FORA DO AR", 8, Color.White, FontWeight.Bold) }
             if (fav) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(20.dp).clip(CircleShape).background(Color(0xC8050816)), contentAlignment = Alignment.Center) { T("♥", 11, Color(0xFFFF8FB8), FontWeight.Bold) }
             if (prog != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x55FFFFFF))) {

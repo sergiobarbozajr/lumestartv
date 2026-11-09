@@ -162,13 +162,13 @@ object Store {
         "Canais abertos e gratuitos do Brasil (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/canais-brasil.m3u8",
         "Filmes de domínio público (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/filmes-dominio-publico.m3u8",
         "Séries de domínio público (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/series-dominio-publico.m3u8",
+        "Cinema em português até 1955 (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/portugues.m3u8",
     )
 
     /** Na primeira abertura, coloca os canais abertos do Brasil. Se o usuário remover, não volta sozinho. */
     fun listasDeFabrica() {
-        if (sp.getBoolean("nativasPostas", false)) return
-        addList(NATIVAS[0].first, NATIVAS[0].second)
-        sp.edit().putBoolean("nativasPostas", true).apply()
+        if (!sp.getBoolean("nativasPostas", false)) { addList(NATIVAS[0].first, NATIVAS[0].second); sp.edit().putBoolean("nativasPostas", true).apply() }
+        if (!sp.getBoolean("nativasPt", false)) { addList(NATIVAS[3].first, NATIVAS[3].second); sp.edit().putBoolean("nativasPt", true).apply() }
     }
 
     fun hasList(u: String): Boolean { val n = normUrl(u); return n.isNotEmpty() && lists.any { normUrl(it.url) == n } }
