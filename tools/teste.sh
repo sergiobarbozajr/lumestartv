@@ -126,9 +126,8 @@ sleep 4; shot "modelos_galeria"
 adb forward tcp:8765 tcp:8765
 curl -s -m 10 http://127.0.0.1:8765/controle | grep -q "Controle pelo celular" && echo "controle: pagina ok" >> teste/resumo_extra.txt || echo "controle: pagina FALHOU" >> teste/resumo_extra.txt
 [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -d k=ok http://127.0.0.1:8765/tecla)" = "403" ] && echo "controle: sem codigo recusado" >> teste/resumo_extra.txt || echo "controle: seguranca FALHOU" >> teste/resumo_extra.txt
-abre --es pagina config
-for i in $(seq 1 16); do key KEYCODE_DPAD_DOWN 0.3; done
-sleep 1; shot "config_celular"
+abre --es pagina cfg:celular
+sleep 2; shot "config_celular"
 abre --es pagina streaming
 sleep 3; shot "streaming_logos"
 abre --es pagina cfg:sobre

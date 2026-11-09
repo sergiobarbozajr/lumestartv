@@ -265,7 +265,7 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
             st.openT = -1f
         }
         withFrameNanos { }; withFrameNanos { }
-        args.page?.let { p -> if (MENU.any { it.id == p }) st.page = p else if (p.startsWith("cfg:")) { st.cfgSel = p.removePrefix("cfg:"); st.page = "config" } }
+        args.page?.let { p -> if (MENU.any { it.id == p } || p == "modelos") st.page = p else if (p.startsWith("cfg:")) { st.cfgSel = p.removePrefix("cfg:"); st.page = "config" } }
         try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
         args.url?.let { u ->
             if (u == "desempenho") st.play(testeDesempenho())
