@@ -86,6 +86,7 @@ object Device {
         }
         if (pw == 0) { pw = uiW; ph = uiH }
         if (aw == 0) { aw = pw; ah = ph }
-        return Tela(pw, ph, aw, ah, uiW, uiH, hz.toList(), hdr.distinct())
+        // sempre na horizontal (celular em pé inverte largura e altura)
+        return Tela(maxOf(pw, ph), minOf(pw, ph), maxOf(aw, ah), minOf(aw, ah), maxOf(uiW, uiH), minOf(uiW, uiH), hz.toList(), hdr.distinct())
     }
 }
