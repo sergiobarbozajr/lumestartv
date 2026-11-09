@@ -292,7 +292,7 @@ object Synth {
         hole(b, 0.0, IntroPlan.TB + 0.1, rnd)
         // eletricidade vai para uma trilha própria, abafada depois (no espaço o som chega surdo e distante)
         val e = Buf(IntroPlan.END + 0.3)
-        plan.holeBolts.forEach { zap(e, it, rnd, 0.9) }
+        // sem os choques dos raios do buraco negro (raios tirados da entrada)
         riser(b, 3.55, 1.15, rnd)
         boom(b, IntroPlan.TB, rnd)
         zap(e, IntroPlan.TB + 0.14, rnd); zap(e, IntroPlan.TB + 0.32, rnd)
