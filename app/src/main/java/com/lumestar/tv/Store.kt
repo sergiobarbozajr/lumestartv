@@ -163,12 +163,25 @@ object Store {
         "Filmes de domínio público (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/filmes-dominio-publico.m3u8",
         "Séries de domínio público (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/series-dominio-publico.m3u8",
         "Cinema em português até 1955 (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/portugues.m3u8",
+        "Filmes e séries livres de 1980 para cá (LumeStarTV)" to "https://raw.githubusercontent.com/sergiobarbozajr/Playlist-canais/main/livres-1980.m3u8",
     )
 
     /** Na primeira abertura, coloca os canais abertos do Brasil. Se o usuário remover, não volta sozinho. */
+    /**
+     * De fábrica: canais abertos do Brasil e filmes/séries livres de 1980 para cá.
+     * Os clássicos antigos (até 1955) ficam como opção em Listas e formatos; se foram postos sozinhos
+     * pela 0.9.0, saem uma vez (quem quiser adiciona de novo pelo botão).
+     */
     fun listasDeFabrica() {
-        if (!sp.getBoolean("nativasPostas", false)) { addList(NATIVAS[0].first, NATIVAS[0].second); sp.edit().putBoolean("nativasPostas", true).apply() }
-        if (!sp.getBoolean("nativasPt", false)) { addList(NATIVAS[3].first, NATIVAS[3].second); sp.edit().putBoolean("nativasPt", true).apply() }
+        val ed = sp.edit()
+        if (!sp.getBoolean("nativasPostas", false)) { addList(NATIVAS[0].first, NATIVAS[0].second); ed.putBoolean("nativasPostas", true) }
+        if (!sp.getBoolean("nativasLivres", false)) { addList(NATIVAS[4].first, NATIVAS[4].second); ed.putBoolean("nativasLivres", true) }
+        if (sp.getBoolean("nativasPt", false) && !sp.getBoolean("nativasPtTirada", false)) {
+            val n = normUrl(NATIVAS[3].second)
+            if (lists.removeAll { normUrl(it.url) == n }) saveLists()
+            ed.putBoolean("nativasPtTirada", true)
+        }
+        ed.apply()
     }
 
     fun hasList(u: String): Boolean { val n = normUrl(u); return n.isNotEmpty() && lists.any { normUrl(it.url) == n } }
