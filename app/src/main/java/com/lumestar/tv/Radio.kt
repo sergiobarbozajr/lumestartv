@@ -76,6 +76,30 @@ object Radio {
         }
     }
 
+    /** Rádios favoritas: guardadas inteiras (não dependem da cidade escolhida). */
+    var favoritas by mutableStateOf<List<Estacao>>(emptyList()); private set
+    private var favLidas = false
+    fun carregarFavoritas() {
+        if (favLidas) return; favLidas = true
+        favoritas = try {
+            val a = org.json.JSONArray(PP.sp.getString("radiosFavoritas", "[]"))
+            (0 until a.length()).map { i -> a.getJSONObject(i).let { o ->
+                Estacao(o.getString("id"), o.getString("nome"), o.getString("url"), o.optString("logo"), o.optString("cidade"), o.optString("estado"),
+                    0.0, 0.0, "", 0, o.optInt("kbps")) } }
+        } catch (e: Throwable) { emptyList() }
+    }
+    fun favorita(e: Estacao) = favoritas.any { it.id == e.id }
+    /** Liga/desliga a favorita; devolve true se ficou favorita. */
+    fun alternarFavorita(e: Estacao): Boolean {
+        carregarFavoritas()
+        val on = !favorita(e)
+        favoritas = if (on) listOf(e) + favoritas else favoritas.filter { it.id != e.id }
+        val a = org.json.JSONArray()
+        favoritas.forEach { x -> a.put(org.json.JSONObject().put("id", x.id).put("nome", x.nome).put("url", x.url).put("logo", x.logo).put("cidade", x.cidade).put("estado", x.estado).put("kbps", x.kbps)) }
+        PP.sp.edit().putString("radiosFavoritas", a.toString()).apply()
+        return on
+    }
+
     fun alternar() { controller?.let { if (it.isPlaying) it.pause() else it.play() } }
 
     /** Para a rádio (ex.: ao abrir um vídeo). */
@@ -173,9 +197,15 @@ fun RadioPage(st: AppState, locked: Boolean) {
                     T(Radio.estado.ifBlank { if (Radio.pausado) "Pausada" else "No ar · continua tocando fora do app" }, 11, C.muted, maxLines = 1)
                 }
                 Btn(if (Radio.pausado) "▶ Tocar" else "⏸ Pausar", locked = locked, primary = true) { Radio.alternar() }
+                Btn(if (Radio.favorita(e)) "♥ Favorita" else "♡ Favoritar", locked = locked) { st.say(if (Radio.alternarFavorita(e)) "♥ ${e.nome} nas rádios favoritas" else "${e.nome} saiu das favoritas") }
                 Btn("■ Parar", locked = locked) { Radio.parar() }
             }
         }
+        Radio.carregarFavoritas()
+        if (Radio.favoritas.isNotEmpty()) {
+            T("♥ RÁDIOS FAVORITAS (${Radio.favoritas.size})", 11, C.a1, FontWeight.Bold)
+            GradeRadios(ctx, Radio.favoritas, locked)
+        } else T("Dica: toque uma rádio e use \"♡ Favoritar\" para ela aparecer aqui no topo.", 11, C.dim)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             T("Cidade: " + PP.radioCidade, 14, C.fg, FontWeight.SemiBold)
         }
@@ -245,6 +275,7 @@ private fun CardRadio(ctx: Context, e: Estacao, locked: Boolean) {
                 .clickable(remember { MutableInteractionSource() }, null) { Sfx.ok(); Radio.tocar(ctx, e) }
         ) {
             LogoArte(e.nome, e.logo, Modifier.fillMaxSize(), pad = 8.dp, tamanhoNome = 13) { ModeloCard(Modelo.RADIO, e.nome, Modifier.fillMaxSize(), aoVivo = false) }
+            if (Radio.favorita(e)) Box(Modifier.align(Alignment.TopStart).padding(4.dp).size(18.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xC8050816)), contentAlignment = Alignment.Center) { T("♥", 10, Color(0xFFFF8FB8), FontWeight.Bold) }
             if (ativo) Box(Modifier.align(Alignment.TopEnd).padding(4.dp).clip(RoundedCornerShape(6.dp)).background(C.a1).padding(horizontal = 5.dp, vertical = 1.dp)) { T("NO AR", 8, Color(0xFF050816), FontWeight.Bold) }
         }
         T(e.nome, 11, if (f) C.fg else C.muted, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(top = 4.dp))

@@ -134,6 +134,15 @@ object PhoneServer {
                 if (!ok) responder(c, "403 Forbidden", "text/plain", "parear")
                 else { Controle.texto(lerForm(ins, len)["t"].orEmpty()); responder(c, "200 OK", "text/plain", "ok") }
             }
+            !ok && caminho == "/controle" && first.contains("?c=") -> {
+                // QR Code da TV: o código já vem no endereço, conecta sem digitar
+                val cod = Regex("[?&]c=(\\d{4})").find(first)?.groupValues?.get(1).orEmpty()
+                val (nova, msg) = Controle.parear(cod)
+                if (nova != null) {
+                    main.post { Controle.aviso?.invoke("Celular conectado como controle remoto") }
+                    responder(c, "303 See Other", "text/plain", "", "Location: /controle\r\nSet-Cookie: lume=$nova; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax\r\n")
+                } else responder(c, "200 OK", "text/html", paginaParear("$msg O código muda quando a TV é desconectada; leia o QR Code de novo."))
+            }
             else -> responder(c, "200 OK", "text/html", if (ok) paginaControle() else paginaParear(""))
         }
     }

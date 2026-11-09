@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asImageBitmap
 import java.security.SecureRandom
 import java.util.concurrent.Executors
 
@@ -102,4 +103,12 @@ object Controle {
         if (limpo.isEmpty()) return
         main.post { (noTeclado ?: semTeclado)?.invoke(limpo) }
     }
+
+    /** QR Code (preto no branco, com margem) com o endereço que já conecta o celular. */
+    fun qr(texto: String): androidx.compose.ui.graphics.ImageBitmap? = try {
+        val m = com.google.zxing.qrcode.QRCodeWriter().encode(texto, com.google.zxing.BarcodeFormat.QR_CODE, 0, 0, mapOf(com.google.zxing.EncodeHintType.MARGIN to 2))
+        val w = m.width; val h = m.height
+        val px = IntArray(w * h) { i -> if (m.get(i % w, i / w)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt() }
+        android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+    } catch (e: Throwable) { null }
 }

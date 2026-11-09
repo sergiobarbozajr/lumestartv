@@ -18,8 +18,8 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 47
-        versionName = "0.9.3"
+        versionCode = 48
+        versionName = "0.9.4"
         // chave padrão do TMDB: vem do segredo TMDB_KEY do GitHub na hora de compilar (nunca fica no código)
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() } + "\"")
         buildConfigField("String", "TMDB_KEY2", "\"" + (System.getenv("TMDB_KEY_2") ?: "").filter { it.isLetterOrDigit() } + "\"")
@@ -89,6 +89,8 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")
 
+    // QR Code do "Controle pelo celular" (só a parte que gera o código, sem câmera)
+    implementation("com.google.zxing:core:3.5.3")
     // capas e logos
     implementation("io.coil-kt:coil-compose:2.6.0")
     // reprodutor (HLS, DASH, RTSP e vídeo comum)

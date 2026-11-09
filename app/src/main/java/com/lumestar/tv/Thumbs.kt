@@ -56,6 +56,31 @@ object Thumbs {
 
     fun proximo(): Item? = synchronized(fila) { fila.removeFirstOrNull() }
 
+    /**
+     * Algumas TVs (ex.: TCL) entregam o quadro só num canto e o resto vem verde (área vazia do decodificador).
+     * Acha a parte com imagem, recorta e amplia; se quase tudo for verde ou preto, descarta (o card usa o logo).
+     */
+    fun recortar(b: android.graphics.Bitmap): android.graphics.Bitmap? {
+        val w = b.width; val h = b.height
+        val px = IntArray(w * h); b.getPixels(px, 0, w, 0, 0, w, h)
+        fun vazio(c: Int): Boolean {
+            val r = c shr 16 and 255; val g = c shr 8 and 255; val bl = c and 255
+            return (g > 120 && r < 70 && bl < 70) || (r < 10 && g < 10 && bl < 10)
+        }
+        var x0 = w; var y0 = h; var x1 = -1; var y1 = -1; var cheios = 0
+        for (y in 0 until h step 2) for (x in 0 until w step 2) if (!vazio(px[y * w + x])) {
+            cheios++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+        }
+        if (x1 < 0) return null
+        val bw = x1 - x0 + 2; val bh = y1 - y0 + 2
+        // a parte com imagem precisa ter um tamanho mínimo e estar quase toda preenchida
+        if (bw < w / 6 || bh < h / 6 || cheios < (bw / 2) * (bh / 2) * .6f) return null
+        if (bw >= w - 8 && bh >= h - 8) return android.graphics.Bitmap.createScaledBitmap(b, 256, 144, true)
+        val cx = x0.coerceIn(0, w - 1); val cy = y0.coerceIn(0, h - 1)
+        val corte = android.graphics.Bitmap.createBitmap(b, cx, cy, bw.coerceAtMost(w - cx), bh.coerceAtMost(h - cy))
+        return android.graphics.Bitmap.createScaledBitmap(corte, 256, 144, true)
+    }
+
     fun guardar(id: String, b: android.graphics.Bitmap) { synchronized(fotos) { fotos[id] = b.asImageBitmap() to System.currentTimeMillis() }; rev++ }
     fun falhou(id: String) { falhas[id] = System.currentTimeMillis() }
 }
@@ -94,7 +119,7 @@ fun ThumbHost(ocupado: () -> Boolean) {
                 val ok = withTimeoutOrNull(9000) { quadro.await() } != null && player.playerError == null
                 if (ok) {
                     delay(900)
-                    val b = try { tv[0]?.getBitmap(256, 144) } catch (e: Throwable) { null }
+                    val b = try { tv[0]?.getBitmap(640, 360)?.let { x -> Thumbs.recortar(x) } } catch (e: Throwable) { null }
                     if (b != null) Thumbs.guardar(it.id, b) else Thumbs.falhou(it.id)
                 } else Thumbs.falhou(it.id)
             } catch (e: Throwable) { Thumbs.falhou(it.id) }

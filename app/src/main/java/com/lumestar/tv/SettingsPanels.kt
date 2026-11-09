@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -221,11 +222,18 @@ fun CelularPanel(st: AppState, locked: Boolean) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.a2.copy(alpha = .12f)).border(1.dp, C.a2.copy(alpha = .4f), RoundedCornerShape(12.dp)).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)) {
             if (ip == null) T("A TV não está conectada a uma rede.", 13, C.fg, FontWeight.SemiBold)
-            else {
-                T("1. No celular, abra no navegador:", 12, C.muted)
+            else Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                val qr = remember(ip, Controle.codigo) { Controle.qr("http://$ip:${PhoneServer.PORT}/controle?c=${Controle.codigo}") }
+                if (qr != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    androidx.compose.foundation.Image(qr, "QR Code do controle", Modifier.size(132.dp).clip(RoundedCornerShape(8.dp)), filterQuality = androidx.compose.ui.graphics.FilterQuality.None)
+                    T("Mais fácil: aponte a câmera", 10, C.a1, FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                T("Ou, no celular, abra no navegador:", 12, C.muted)
                 T("http://$ip:${PhoneServer.PORT}/controle", 20, C.fg, FontWeight.ExtraBold)
-                T("2. Digite o código (só na primeira vez em cada celular):", 12, C.muted)
+                T("e digite o código (só na primeira vez em cada celular):", 12, C.muted)
                 T(Controle.codigo.toCharArray().joinToString("  "), 30, C.a1, FontWeight.ExtraBold)
+                }
             }
         }
     }

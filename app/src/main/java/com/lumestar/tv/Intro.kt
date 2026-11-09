@@ -174,18 +174,62 @@ object Space {
         c.restore()
     }
 
-    /** Buraco negro completo: halo lenteado, disco de trás, anel, sombra e disco da frente. */
+    private val oval = android.graphics.RectF()
+    private val CORES = IntArray(37)
+    private val POS = FloatArray(37) { it / 36f }
+
+    /** Cor do disco: branco-azulado na borda de dentro, azul no meio, roxo por fora. */
+    private fun corDisco(f: Float, a: Float): Int {
+        val r: Float; val g: Float; val b: Float
+        if (f < .35f) { val k = f / .35f; r = .92f + (.55f - .92f) * k; g = .94f + (.62f - .94f) * k; b = 1f }
+        else { val k = (f - .35f) / .65f; r = .55f + (.62f - .55f) * k; g = .62f + (.36f - .62f) * k; b = 1f + (.95f - 1f) * k }
+        return argb(a.coerceIn(0f, 1f), r, g, b)
+    }
+
+    /**
+     * Anéis de faixas girando: elipses (achatadas por [ys]) de r0 a r1 (em unidades de R), só no arco
+     * [de, de+varre] graus. O lado esquerdo é mais claro (o disco vem na nossa direção), como no 3D.
+     */
+    private fun aneis(c: Canvas, cx: Float, cy: Float, R: Float, t: Float, spin: Float, ys: Float, r0: Float, r1: Float, n: Int, de: Float, varre: Float, forca: Float, dop: Float) {
+        val w = (r1 - r0) / n * R * 2.4f
+        c.save(); c.translate(cx, cy); c.scale(1f, ys)
+        stroke.strokeCap = Paint.Cap.BUTT; stroke.strokeWidth = w; stroke.xfermode = add
+        for (i in 0 until n) {
+            val f = i / (n - 1f); val rr = (r0 + (r1 - r0) * f) * R
+            val base = forca * (1 - f).pow(.9f)
+            val fase = t * spin * 1.6f / (rr / R).pow(1.5f)
+            for (k in 0..36) {
+                val m = (2 * PI * k / 36).toFloat()
+                val d = 1 + dop * -cos(m)
+                val ruido = .35f + .65f * (.5f + .5f * sin(3 * (m - fase) + i * 2.1f)) * (.6f + .4f * sin(7 * (m - fase * 1.3f) + i * 5.3f))
+                CORES[k] = corDisco(f, base * d * ruido)
+            }
+            stroke.shader = android.graphics.SweepGradient(0f, 0f, CORES, POS)
+            oval.set(-rr, -rr, rr, rr)
+            c.drawArc(oval, de, varre, false, stroke)
+        }
+        stroke.shader = null; stroke.xfermode = null; stroke.strokeCap = Paint.Cap.ROUND
+        c.restore()
+    }
+
+    /**
+     * Buraco negro no estilo da prévia 3D: disco achatado atrás, o mesmo disco curvado pela gravidade
+     * por cima e por baixo da esfera, anel de fótons, sombra e o disco da frente passando na frente.
+     */
     fun blackHole(c: Canvas, cx: Float, cy: Float, R: Float, t: Float, spin: Float, s: Float) {
         if (R <= 0.5f) return
-        radial(c, cx, cy, R * 1.75f, intArrayOf(0, argb(.85f, 1f, .94f, .88f), argb(.5f, .725f, .627f, 1f), argb(0f, .235f, .353f, .784f)), floatArrayOf(0f, .56f, .66f, 1f))
-        disk(c, cx, cy, R, t, false, spin, s)
-        stroke.strokeWidth = 10 * s; stroke.color = argb(.25f, .7f, .55f, 1f)
-        c.drawCircle(cx, cy, R * 1.03f, stroke)
-        stroke.strokeWidth = 2 * s; stroke.color = argb(.95f, .92f, .89f, 1f)
-        c.drawCircle(cx, cy, R * 1.03f, stroke)
+        val ys = .17f
+        radial(c, cx, cy, R * 3.6f, intArrayOf(argb(.28f, .47f, .35f, .86f), argb(.12f, .35f, .27f, .78f), argb(0f, .16f, .12f, .47f)), floatArrayOf(0f, .4f, 1f), true)
+        aneis(c, cx, cy, R, t, spin, ys, 1.3f, 4.2f, 30, 180f, 180f, .3f, .5f)      // disco de trás
+        aneis(c, cx, cy, R, t, spin, .86f, 1.03f, 1.95f, 20, 180f, 180f, .85f, .45f) // curvado por cima
+        aneis(c, cx, cy, R, t, spin, .92f, 1.02f, 1.4f, 9, 0f, 180f, .5f, .45f)       // imagem de baixo
+        stroke.xfermode = add
+        stroke.strokeWidth = 6 * s; stroke.color = argb(.35f, .67f, .59f, 1f); c.drawCircle(cx, cy, R * 1.02f, stroke)
+        stroke.strokeWidth = 1.6f * s; stroke.color = argb(.95f, .92f, .91f, 1f); c.drawCircle(cx, cy, R * 1.02f, stroke)
+        stroke.xfermode = null
         fill.color = 0xFF000000.toInt()
         c.drawCircle(cx, cy, R, fill)
-        disk(c, cx, cy, R, t, true, spin, s)
+        aneis(c, cx, cy, R, t, spin, ys, 1.3f, 4.2f, 30, 0f, 180f, .4f, .5f)        // disco da frente
     }
 
     /** Filamento de plasma ondulado entre dois pontos (vem do próprio objeto, não do céu). */
