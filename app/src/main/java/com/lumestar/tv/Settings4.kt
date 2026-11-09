@@ -124,6 +124,13 @@ fun AiImagePanel(st: AppState, locked: Boolean) {
         TogRow("Nitidez leve", "Realça os detalhes de cada quadro na hora, sem atraso perceptível.", PP.aiSharp, locked) { PP.aiSharp = it }
         TogRow("Qualidade cheia na troca", "Abre filmes, episódios e canais já na maior resolução, acabando com o embaçado inicial. Se a internet engasgar, baixa sozinho.", PP.fullQuality, locked) { PP.fullQuality = it }
     }
+    AiBlock("Saída de vídeo e teste de desempenho") {
+        T("Direto: o vídeo vai para a camada de vídeo da TV, na resolução do painel (4K chega em 4K). Clássico: o vídeo é desenhado dentro da tela do app (em TVs 4K com interface 1080p, um vídeo 4K é reduzido e ampliado de novo). No Automático, se o direto der erro, o app volta sozinho para o clássico.", 11, C.muted, lineHeight = 15)
+        Opts("Saída de vídeo", linkedMapOf("auto" to "Automático", "direto" to "Direto", "classico" to "Clássico"), PP.videoMode, locked) { PP.videoMode = it; if (it == "auto") PP.diretoFalhou = false }
+        T("Agora: " + VideoOut.nomeModo(), 12, C.ok)
+        Btn("▶ Fazer teste de desempenho (cerca de 1 minuto)", locked = locked, primary = true) { st.play(testeDesempenho()) }
+        T(if (PP.testeRes.isNotBlank()) "Último teste: " + PP.testeRes else "O teste toca um vídeo 4K nos dois modos, mede quadros perdidos e temperatura, e deixa a TV no melhor modo.", 11, C.dim, lineHeight = 15)
+    }
     AiBlock("Reservado para a versão de PC") {
         TogRow("IA pesada — rede neural + criação de quadros", "Reconstrução por rede neural e quadros intermediários precisam de placa de vídeo dedicada (como a RTX 3070). Na TV a ampliação automática acima já usa o máximo seguro.", false, locked, enabled = false) { }
     }

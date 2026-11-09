@@ -1,0 +1,7 @@
+name = "lumestar-erros"
+main = "erros.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+[vars]
+REPO = "sergiobarbozajr/lumestartv"

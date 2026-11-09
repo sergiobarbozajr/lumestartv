@@ -52,6 +52,10 @@ object PP {
     var quality by StrP("qualidade", "auto")
     var aiUp by StrP("reforcoIa", "auto")      // auto | 1440 | 1080 | off
     var matchHz by BoolP("frequenciaTela", true)   // "Suavização 100 Hz": entrega a cadência certa para o MEMC da TV
+    var videoMode by StrP("videoDireto", "auto")   // auto | direto | classico
+    var diretoFalhou by BoolP("diretoFalhou", false)
+    var testeRes by StrP("testeDesempenho", "")
+    var enviarErros by BoolP("enviarErros", true)
     var colorStyle by StrP("estiloCor", "fiel")    // fiel | vivido | cinema
     var aiSkin by BoolP("iaPele", true)
     var aiNature by BoolP("iaPaisagem", true)

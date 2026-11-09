@@ -49,6 +49,8 @@ object ImageAi {
     /** Altura da camada de vídeo do app (interface) e do painel físico; definidas ao abrir o app. */
     @Volatile var telaH = 1080
     @Volatile var painelH = 1080
+    /** true quando o reprodutor está no vídeo direto (camada de vídeo da TV, na resolução do painel). */
+    @Volatile var direto = false
     fun initTela(c: android.content.Context) {
         try { val t = Device.tela(c); telaH = minOf(t.uiW, t.uiH); painelH = minOf(t.painelW, t.painelH) } catch (e: Throwable) {}
     }
@@ -70,15 +72,17 @@ object ImageAi {
             r.ms1080 in 0.1f..12f || r.msLite in 0.1f..12f -> 1080
             else -> 0
         }
-        val teto = if (telaH >= 2100) 2160 else if (telaH >= 1400) 1440 else 1080
+        val camada = if (direto) maxOf(telaH, painelH) else telaH
+        val teto = if (camada >= 2100) 2160 else if (camada >= 1400) 1440 else 1080
         return minOf(placa, teto)
     }
 
     /** Frase para Configurações: até onde a IA vai neste aparelho. */
     fun resumoAuto(): String {
-        val a = alvoAltura(2)
+        val d0 = direto; direto = VideoOut.direto()
+        val a = alvoAltura(2); val dir = direto; direto = d0
         if (semPlaca() || a == 0) return "Neste aparelho a IA de imagem fica desligada para não travar."
-        val tv = if (painelH > telaH + 100) " A tela é ${if (painelH >= 2100) "4K" else "${painelH}p"}: a partir daí, o chip da TV amplia para a tela toda, sem custo." else ""
+        val tv = if (!dir && painelH > telaH + 100) " A tela é ${if (painelH >= 2100) "4K" else "${painelH}p"}: a partir daí, o chip da TV amplia para a tela toda, sem custo." else if (dir) " Vídeo direto: a imagem vai na resolução do painel." else ""
         return "Automático: vídeos menores são ampliados pela IA até ${a}p, o máximo que chega à tela e que a placa aguenta sem travar.$tv"
     }
 
@@ -116,7 +120,8 @@ object ImageAi {
         val chipTv = if (hwAi) " + IA da TV" else ""
         val style = when (PP.colorStyle) { "vivido" -> "Vívido"; "cinema" -> "Cinema"; else -> "Fiel" }
         val res = if (amplia) "${h}p→${alvo}p" else "${h}p"
-        val tvAmplia = if (painelH > telaH + 100 && (if (amplia) alvo else h) <= telaH) " · TV amplia p/ ${if (painelH >= 2100) "4K" else "${painelH}p"}" else ""
+        val saida = if (amplia) alvo else h
+        val tvAmplia = if (!direto && painelH > telaH + 100 && saida <= telaH) " · TV amplia p/ ${if (painelH >= 2100) "4K" else "${painelH}p"}" else if (direto) " · direto" else ""
         val p = if (cap <= 0 || semPlaca()) Plan("none", emptyList(), (if (semPlaca()) "IA desligada (modo leve)" else "IA pausada (TV no limite)") + chipTv, 0, h)
         else Plan("scene$tag", fx(), "IA $style · $res$tvAmplia$chipTv", if (amplia) 2 else 1, if (amplia) alvo else h)
         return if (compare && p.effects.isEmpty()) Plan("cmp$tag", fxNative(), "Comparando: original | IA", p.tier, h)

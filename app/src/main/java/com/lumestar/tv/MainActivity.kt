@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         Store.init(this)
         Secret.init(this) // antes de qualquer senha ser lida (proxy, TMDB, contas)
         PP.init(this)
-        Tmdb.init(this); Logos.init(this); ImageAi.initTela(this)
+        Tmdb.init(this); Logos.init(this); ImageAi.initTela(this); Reporter.init(this)
         // diagnóstico de imagem: uma vez por versão, em segundo plano, 20 s depois de abrir (fora da abertura)
         Perf.init(this, prefs.perf)
         if (Perf.lite) {

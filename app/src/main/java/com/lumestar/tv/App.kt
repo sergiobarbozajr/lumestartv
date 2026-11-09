@@ -207,6 +207,9 @@ object NewsState {
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+fun testeDesempenho() = PlayReq("teste:desempenho", "Teste de desempenho", VideoOut.TESTE_URL, false, 0L, "Teste", teste = true)
+
 class LaunchArgs(val skipIntro: Boolean = false, val page: String? = null, val url: String? = null)
 
 @Composable
@@ -253,7 +256,10 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
         withFrameNanos { }; withFrameNanos { }
         args.page?.let { p -> if (MENU.any { it.id == p }) st.page = p else if (p.startsWith("cfg:")) { st.cfgSel = p.removePrefix("cfg:"); st.page = "config" } }
         try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
-        args.url?.let { u -> st.play(PlayReq("teste:" + u.hashCode(), "Teste de reprodução", u, !u.contains(".mp4"), 0L, "Teste")) }
+        args.url?.let { u ->
+            if (u == "desempenho") st.play(testeDesempenho())
+            else st.play(PlayReq("teste:" + u.hashCode(), "Teste de reprodução", u, !u.contains(".mp4"), 0L, "Teste"))
+        }
         NewsState.load()
         Catalog.refresh(ctx)
         Updater.check(ctx) { r ->
@@ -595,6 +601,9 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
         "adulto" -> AdultPanel(st, locked)
         "sobre" -> {
             KV(deviceInfo(ctx))
+            var env by remember { mutableStateOf(PP.enviarErros) }
+            Seg("Enviar relatório de erros automaticamente", listOf(1 to "Ligado", 0 to "Desligado"), if (env) 1 else 0, locked) { env = it == 1; PP.enviarErros = env }
+            T("Quando o app fecha sozinho, um resumo técnico vai para o desenvolvedor corrigir. Não leva endereço de lista, usuário, senha nem o que você assiste.", 11, C.dim, lineHeight = 15)
             var err by remember { mutableStateOf(CrashLog.last) }
             if (err.isNotBlank()) {
                 LaunchedEffect(Unit) { CrashLog.markSeen(ctx) }
@@ -662,6 +671,7 @@ private fun UpdatePanel(st: AppState, locked: Boolean) {
     if (!Updater.canInstall(ctx)) T("Na primeira atualização a TV pede para liberar \"instalar apps desconhecidos\" para o LumeStarTV. Libere e volte aqui.", 12, C.warn, lineHeight = 17)
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun deviceInfo(ctx: Context): List<Pair<String, String>> {
     val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
@@ -677,10 +687,12 @@ private fun deviceInfo(ctx: Context): List<Pair<String, String>> {
         "Processador" to "${Runtime.getRuntime().availableProcessors()} núcleos · ${Build.HARDWARE}",
         "Memória" to "%.1f GB".format(Locale("pt", "BR"), mi.totalMem / 1073741824.0),
         "Desempenho" to Perf.reason,
-        "Tela (painel)" to t.nome() + if (t.hz.isNotEmpty()) " · até ${t.hz.max()} Hz" else "",
+        "Tela (painel)" to t.nome(),
+        (if (t.hz.isNotEmpty()) "Frequência para apps" to t.hz.joinToString(" / ") + " Hz (jogos no HDMI podem usar mais)" else null),
         (if (t.atualW != t.painelW || t.atualH != t.painelH) "Modo de saída" to "${t.atualW} × ${t.atualH}" else null),
         "Interface do app" to "${t.uiW} × ${t.uiH}" + if (t.uiH < t.painelH) " (a TV amplia para a tela toda)" else "",
         (if (t.hdr.isNotEmpty()) "HDR" to t.hdr.joinToString(", ") else null),
+        "Saída de vídeo" to VideoOut.nomeModo(),
         "Aplicativo" to "LumeStarTV ${Updater.currentVersion(ctx)}",
     )
 }

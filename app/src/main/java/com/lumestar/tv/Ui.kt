@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -97,9 +98,14 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Box(
-            Modifier.fillMaxWidth().height(h).clip(RoundedCornerShape(10.dp)).background(coverBrush(it.title))
+            Modifier.fillMaxWidth().height(h)
+                // selecionado: sombra colorida em volta (brilho), além da borda
+                .shadow(if (f) 16.dp else 0.dp, RoundedCornerShape(10.dp), ambientColor = C.a1, spotColor = C.a1)
+                .clip(RoundedCornerShape(10.dp)).background(coverBrush(it.title))
                 .border(if (f) 2.dp else 0.dp, if (f) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
         ) {
+            // logo de canal selecionado: halo de luz atrás do logo
+            if (f && wide) Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(C.a1.copy(alpha = .38f), Color.Transparent))))
             if (!wide || (it.logo.isBlank() && Logos.find(it.title).isBlank())) Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Bottom) {
                 T(if (it.kind == LIVE) "CANAL" else if (it.kind == SERIES) "SÉRIE" else "FILME", 8, Color.White.copy(alpha = .7f), FontWeight.Bold)
                 T(Tmdb.title(it), 11, Color.White, FontWeight.Bold, maxLines = 3, lineHeight = 13)
@@ -112,6 +118,7 @@ fun Card(st: AppState, it: Item, locked: Boolean, wide: Boolean = it.kind == LIV
             if (prog != null) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x55FFFFFF))) {
                 Box(Modifier.fillMaxWidth((prog.pos.toFloat() / prog.dur).coerceIn(0f, 1f)).height(3.dp).background(Brush.horizontalGradient(listOf(C.a1, C.a2))))
             }
+            if (f) Box(Modifier.matchParentSize().background(Brush.linearGradient(0f to Color.White.copy(alpha = .22f), .45f to Color.Transparent)))
             if (f) Box(Modifier.matchParentSize().border(2.dp, C.a1, RoundedCornerShape(10.dp)))
         }
         T(caption ?: if (wide) Tmdb.title(it) else listOf(it.group, if (it.year > 0) it.year.toString() else "").filter { it.isNotBlank() }.joinToString(" · "), 10, if (f) C.fg else C.muted, maxLines = 1)
@@ -278,7 +285,7 @@ fun SuggestBox(st: AppState, locked: Boolean, modifier: Modifier = Modifier) {
     }
     val (texto, cfg) = SUGESTOES[i]
     Column(
-        modifier.width(380.dp).clip(RoundedCornerShape(16.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(16.dp)).padding(18.dp),
+        modifier.width(400.dp).clip(RoundedCornerShape(16.dp)).background(C.panel).border(1.dp, C.line, RoundedCornerShape(16.dp)).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -287,7 +294,7 @@ fun SuggestBox(st: AppState, locked: Boolean, modifier: Modifier = Modifier) {
         }
         var f by remember { mutableStateOf(false) }
         Box(
-            Modifier.fillMaxWidth().height(86.dp).clip(RoundedCornerShape(12.dp)).background(if (f) C.panel2 else C.bg.copy(alpha = .5f))
+            Modifier.fillMaxWidth().height(104.dp).clip(RoundedCornerShape(12.dp)).background(if (f) C.panel2 else C.bg.copy(alpha = .5f))
                 .border(1.dp, if (f) C.a1 else Color.Transparent, RoundedCornerShape(12.dp))
                 .focusProperties { canFocus = !locked }
                 .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); if (n != f) focos += if (n) 1 else -1; f = n }
@@ -295,8 +302,8 @@ fun SuggestBox(st: AppState, locked: Boolean, modifier: Modifier = Modifier) {
                 .padding(12.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                T(texto, 13, C.fg, FontWeight.SemiBold, maxLines = 3, lineHeight = 18)
-                T(if (f) "OK para abrir esta configuração" else "Configurações › " + (cfgName(cfg) ?: ""), 10, if (f) C.a1 else C.muted, maxLines = 1)
+                T(texto, 11, C.fg, FontWeight.SemiBold, maxLines = 4, lineHeight = 15)
+                T(if (f) "OK para abrir esta configuração" else "Configurações › " + (cfgName(cfg) ?: ""), 9, if (f) C.a1 else C.muted, maxLines = 1)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

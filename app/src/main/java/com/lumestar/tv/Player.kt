@@ -8,6 +8,8 @@ import android.media.audiofx.Equalizer
 import android.os.Build
 import android.view.Gravity
 import android.view.TextureView
+import android.view.SurfaceView
+import android.view.View
 import android.widget.FrameLayout
 import android.view.KeyEvent as AKey
 import androidx.activity.compose.BackHandler
@@ -34,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -89,7 +92,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /** O que tocar: canal ao vivo, filme, episódio ou transmissão de rede. */
-class PlayReq(val id: String, val title: String, val url: String, val live: Boolean, val start: Long, val group: String, val ext: String = "", val cacheMs: Int = -1)
+class PlayReq(val id: String, val title: String, val url: String, val live: Boolean, val start: Long, val group: String, val ext: String = "", val cacheMs: Int = -1, val teste: Boolean = false)
 
 private fun fmt(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0); val h = s / 3600; val m = s % 3600 / 60; val x = s % 60
@@ -282,26 +285,35 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     val holder = remember { arrayOfNulls<Any>(4) } // [container, textureView, subtitleView, audioFx]
     fun say(m: String) { osd = m; osdId++ }
     fun tv() = holder[1] as? TextureView
+    fun vview() = holder[1] as? View
+    // vídeo direto (camada de vídeo da TV) ou clássico (dentro da tela do app); muda sozinho se o direto falhar
+    var direto by remember { mutableStateOf(VideoOut.direto()) }
+    var testeMsg by remember { mutableStateOf("") }
+    var testeReserva by remember { mutableIntStateOf(0) }
     fun container() = holder[0] as? FrameLayout
     fun fx() = holder[3] as? AudioFx
 
     fun save() { if (!req.live) Store.setProgress(req.id, player.currentPosition, player.duration.takeIf { it > 0 } ?: 0L) }
 
     fun layoutVideo() {
-        val c = container() ?: return; val t = tv() ?: return
+        val c = container() ?: return; val v = vview() ?: return
         val W = c.width.toFloat(); val H = c.height.toFloat()
         if (W <= 0 || H <= 0) return
         val va = if (vsize.width > 0 && vsize.height > 0) vsize.width * vsize.pixelWidthHeightRatio / vsize.height else 16f / 9f
         var w = W; var h = W / va
         if (h > H) { h = H; w = H * va }
-        val lp = t.layoutParams as FrameLayout.LayoutParams
-        if (lp.width != w.toInt() || lp.height != h.toInt()) { lp.width = w.toInt(); lp.height = h.toInt(); lp.gravity = Gravity.CENTER; t.layoutParams = lp }
         val u = when (PP.fit) { 1 -> maxOf(W / w, H / h); 2 -> 1.2f; else -> 1f }
-        t.scaleX = u * (1 + PP.fitH / 100f); t.scaleY = u * (1 + PP.fitV / 100f)
+        val sx = u * (1 + PP.fitH / 100f); val sy = u * (1 + PP.fitV / 100f)
+        // SurfaceView não aceita escala de View: no modo direto o zoom vira tamanho (a moldura corta o excesso)
+        val lw = if (v is SurfaceView) (w * sx).toInt() else w.toInt(); val lh = if (v is SurfaceView) (h * sy).toInt() else h.toInt()
+        val lp = v.layoutParams as FrameLayout.LayoutParams
+        if (lp.width != lw || lp.height != lh) { lp.width = lw; lp.height = lh; lp.gravity = Gravity.CENTER; v.layoutParams = lp }
+        if (v is TextureView) { v.scaleX = sx; v.scaleY = sy }
     }
 
     fun applyPicture() {
-        tv()?.setLayerPaint(Paint().apply { colorFilter = ColorMatrixColorFilter(videoMatrix()) })
+        if (direto) { ai.key = "-"; applyAi() } // no direto o brilho/contraste/cor vai junto com a IA, na placa
+        else tv()?.setLayerPaint(Paint().apply { colorFilter = ColorMatrixColorFilter(videoMatrix()) })
         layoutVideo()
     }
 
@@ -318,12 +330,26 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     fun sceneTag() = if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else ""
     fun applyAi() {
         SceneAi.on = !req.live && PP.aiUp != "off" && ai.cap > 0
+        ImageAi.direto = direto
         val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live)
         aiLabel = plan.label + sceneTag()
         ai.tier = plan.tier; ai.outH = plan.outH
-        if (plan.key == ai.key) return
-        ai.key = plan.key
-        val fx = plan.effects
+        // modo direto: brilho/contraste/cor entram como mais um efeito (só filmes e séries; ao vivo segue direto)
+        val cm = videoMatrix()
+        val comCor = direto && !req.live && plan.key != "wait" && !VideoOut.identidade(cm)
+        val key = plan.key + (if (comCor) "|" + cm.array.contentHashCode() else "") + (if (direto) "|d" else "|c")
+        if (key == ai.key) return
+        ai.key = key
+        val fx = plan.effects + (if (comCor) listOf(VideoOut.cor(cm)) else emptyList())
+        (vview() as? SurfaceView)?.let { sv ->
+            // com efeitos, a placa desenha na resolução de saída da IA (até a do painel); sem efeitos, o decodificador manda direto
+            val vh = player.videoFormat?.height ?: 0
+            val oh = if (plan.outH > 0) plan.outH else vh
+            if (fx.isNotEmpty() && oh > 0) {
+                val ar = if (vsize.width > 0 && vsize.height > 0) vsize.width * vsize.pixelWidthHeightRatio / vsize.height else 16f / 9f
+                sv.holder.setFixedSize(((oh * ar).toInt() / 2) * 2, oh)
+            } else sv.holder.setSizeFromLayout()
+        }
         if (fx.isEmpty() && !ai.hadFx) return
         try { player.setVideoEffects(fx); ai.hadFx = fx.isNotEmpty() || ai.hadFx } catch (e: Throwable) { ai.cap = 0; SceneAi.on = false; aiLabel = "" }
     }
@@ -375,7 +401,12 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
 
     /** Tira as faixas pretas: olha uma foto pequena do vídeo e mede as bordas escuras. */
     fun autoBars() {
-        val bmp = try { tv()?.getBitmap(96, 54) } catch (e: Throwable) { null } ?: run { say("Ainda sem imagem para medir"); return }
+        var achou = false
+        VideoOut.foto(vview(), 96, 54) { b -> achou = true; medirFaixas(b) }
+        if (!achou && vview() is TextureView) say("Ainda sem imagem para medir")
+    }
+
+    fun medirFaixas(bmp: android.graphics.Bitmap) {
         fun dark(x: Int, y: Int): Boolean { val p = bmp.getPixel(x, y); return (((p shr 16) and 255) * 3 + ((p shr 8) and 255) * 6 + (p and 255)) / 10 < 20 }
         fun rowDark(y: Int) = (0 until 96 step 4).count { dark(it, y) } >= 22
         fun colDark(x: Int) = (0 until 54 step 3).count { dark(x, it) } >= 17
@@ -411,6 +442,13 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             override fun onCues(c: CueGroup) { (holder[2] as? SubtitleView)?.setCues(c.cues) }
             override fun onAudioSessionIdChanged(id: Int) { fx()?.release(); holder[3] = AudioFx(id).also { it.apply() } }
             override fun onPlayerError(e: PlaybackException) {
+                if (req.teste && e.errorCode in 2000..3999 && testeReserva < VideoOut.TESTE_RESERVA.size) { url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++; return }
+                if (direto && (e.errorCode in 7000..7999 || e.errorCode in 4000..4999)) {
+                    // vídeo direto não funcionou nesta TV: volta para o clássico e lembra para os próximos vídeos
+                    direto = false; if (PP.videoMode == "auto") PP.diretoFalhou = true; ai.key = ""
+                    Reporter.evento(ctx, "video-direto", "Vídeo direto falhou (${e.errorCodeName}); voltou para o clássico", e)
+                    startAt = player.currentPosition; attempt++; say("Vídeo direto falhou nesta TV: voltei para o modo clássico"); return
+                }
                 if (e.errorCode in 7000..7999 && ai.cap > 0) { ai.cap = 0; SceneAi.on = false; ai.key = ""; try { player.setVideoEffects(emptyList()) } catch (x: Throwable) {}; startAt = player.currentPosition; attempt++; say("Reforço de imagem desligado neste vídeo (a TV não aguentou)"); return }
                 val bad = e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                 if (bad && !triedVlc) { triedVlc = true; eng.ok.setUserAgent(UA_VLC); startAt = player.currentPosition; attempt++; return }
@@ -433,8 +471,42 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         var n = 0
         while (true) { delay(500); pos = player.currentPosition; if (player.duration > 0) dur = player.duration; if (++n % 10 == 0) save(); if (n % 2 == 0) watchDrops()
             SceneAi.step()
-            if (SceneAi.on && n % 4 == 0 && player.isPlaying) { tv()?.let { t -> try { t.getBitmap(64, 36)?.let { b -> SceneAi.analyze(b); if (!aiLabel.contains(SceneAi.scene)) applyAiLabel() } } catch (e: Throwable) {} } }
+            if (SceneAi.on && n % 4 == 0 && player.isPlaying) VideoOut.foto(vview(), 64, 36) { b -> try { SceneAi.analyze(b); if (!aiLabel.contains(SceneAi.scene)) applyAiLabel() } catch (e: Throwable) {} }
         }
+    }
+    // Teste de desempenho: o mesmo vídeo no clássico e no direto com IA; mede quadros perdidos e escolhe o modo.
+    if (req.teste) LaunchedEffect(Unit) {
+        val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+        suspend fun fase(dir: Boolean, nome: String): Pair<Boolean, String> {
+            direto = dir; ai.cap = 2; ai.key = ""
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(true).build()
+            testeMsg = "Teste de desempenho · $nome…"
+            var t = 0; while ((player.videoFormat == null || !player.isPlaying) && t < 60) { delay(500); t++ }
+            if (player.videoFormat == null) return false to "$nome: o vídeo de teste não tocou"
+            delay(4000)
+            val c0 = player.videoDecoderCounters; c0?.ensureUpdated(); val r0 = c0?.renderedOutputBufferCount ?: 0; val d0 = c0?.droppedBufferCount ?: 0
+            delay(15000)
+            val c1 = player.videoDecoderCounters; c1?.ensureUpdated()
+            var r = (c1?.renderedOutputBufferCount ?: 0) - r0; var d = (c1?.droppedBufferCount ?: 0) - d0
+            if (r < 0 || d < 0) { r = c1?.renderedOutputBufferCount ?: 0; d = c1?.droppedBufferCount ?: 0 }
+            val h = player.videoFormat?.height ?: 0
+            val quente = if (Build.VERSION.SDK_INT >= 29) pm.currentThermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE else false
+            val caiu = dir && !direto
+            val ok = !caiu && !quente && r > 0 && d <= maxOf(3, r / 50)
+            val saida = if (dir) (if (ai.outH > 0) ai.outH else h) else minOf(h, ImageAi.telaH)
+            return ok to "$nome: ${if (ok) "aprovado" else "reprovado"} · vídeo ${h}p → tela ${saida}p · $d de ${r + d} quadros perdidos" +
+                (if (quente) " · TV esquentou" else "") + (if (caiu) " · deu erro e voltou ao clássico" else "")
+        }
+        val a = fase(false, "Clássico")
+        val podeDireto = Build.VERSION.SDK_INT >= 24 && !Perf.lite
+        val b = if (podeDireto) fase(true, "Direto + IA") else false to "Direto: não disponível neste aparelho"
+        val escolha = if (b.first) "Vídeo direto" else "Clássico"
+        if (podeDireto) { PP.diretoFalhou = !b.first; if (PP.videoMode != "auto") PP.videoMode = "auto" }
+        player.pause()
+        val res = "${a.second}\n${b.second}\nModo escolhido: $escolha"
+        PP.testeRes = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US).format(java.util.Date()) + " · " + res.replace("\n", " · ")
+        Reporter.evento(ctx, "teste-desempenho", res, null)
+        testeMsg = "$res\n\nAperte Voltar para sair."
     }
     LaunchedEffect(showUi, touch, panel) {
         if (showUi && panel == null) { delay(5000); showUi = false; try { rootFocus.requestFocus() } catch (e: Exception) {} }
@@ -495,21 +567,25 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 }
             }
     ) { Compact {
-        AndroidView(factory = { c ->
+        key(direto) { AndroidView(factory = { c ->
             FrameLayout(c).apply {
                 setBackgroundColor(android.graphics.Color.BLACK)
-                val t = TextureView(c)
+                val t: View = if (direto) SurfaceView(c) else TextureView(c)
                 addView(t, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
                 val sv = SubtitleView(c)
                 addView(sv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
                 holder[0] = this; holder[1] = t; holder[2] = sv
-                player.setVideoTextureView(t)
+                if (t is SurfaceView) player.setVideoSurfaceView(t) else player.setVideoTextureView(t as TextureView)
                 addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> post { layoutVideo() } }
                 keepScreenOn = true
-                applyPicture(); applySubStyle()
+                ai.key = ""; applyPicture(); applySubStyle()
             }
-        }, modifier = Modifier.fillMaxSize())
+        }, modifier = Modifier.fillMaxSize()) }
 
+        if (testeMsg.isNotBlank()) Column(Modifier.align(Alignment.TopCenter).padding(top = 30.dp).width(620.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE0E1538)).border(1.dp, C.a1, RoundedCornerShape(16.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            T("TESTE DE DESEMPENHO", 10, C.a1, FontWeight.Bold)
+            T(testeMsg, 14, C.fg, FontWeight.SemiBold, lineHeight = 20)
+        }
         if (buffering && err == null) Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp)).background(Color(0xCC050816)).padding(horizontal = 18.dp, vertical = 10.dp)) { T("Carregando…", 14, C.fg, FontWeight.Bold) }
         err?.let { m ->
             Column(Modifier.align(Alignment.Center).width(460.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE0E1538)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

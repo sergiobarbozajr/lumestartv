@@ -118,6 +118,10 @@ abre --es pagina cfg:sobre
 sleep 3; shot "config_sobre"
 abre --es pagina cfg:ai
 sleep 3; shot "config_ia"
+for u in https://dash.akamaized.net/akamai/streamroot/050714/Spring_4Ktest.mpd https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8; do echo "$u $(curl -s -o /dev/null -w '%{http_code}' $u)"; done > teste/url4k.txt
+abre --es abrir desempenho
+sleep 55; shot "teste_desempenho"
+adb logcat -d | grep -iE "FATAL|VideoFrameProcessingException|PixelCopy" | tail -8 > teste/desempenho.txt
 abre --es pagina inicio
 adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)|PlaybackException" | tail -20 > teste/player_log.txt
 

@@ -1,0 +1,56 @@
+name: Serviço de erros (Cloudflare)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["worker/**", ".github/workflows/erros.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN_ERROS: ${{ secrets.ERROS_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir segredos
+        id: seg
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$GH_TOKEN_ERROS" ]; then
+            echo "Faltam segredos (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, ERROS_GITHUB_TOKEN); nada a publicar."
+            echo "ok=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.seg.outputs.ok == '1'
+        with:
+          node-version: "20"
+      - name: Publicar o serviço e guardar a chave do GitHub nele
+        if: steps.seg.outputs.ok == '1'
+        working-directory: worker
+        run: |
+          npx --yes wrangler@3 deploy
+          printf '%s' "$GH_TOKEN_ERROS" | npx --yes wrangler@3 secret put GH_TOKEN
+      - name: Endereço do serviço para o app
+        if: steps.seg.outputs.ok == '1'
+        run: |
+          sub=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain')
+          [ -n "$sub" ] && [ "$sub" != "null" ] || { echo "sem subdomínio workers.dev"; exit 1; }
+          url="https://lumestar-erros.$sub.workers.dev/erro"
+          echo "Serviço: $url"
+          sleep 10
+          curl -s "https://lumestar-erros.$sub.workers.dev/" ; echo
+          printf '{"erros": "%s"}\n' "$url" > config/servicos.json
+          if ! git diff --quiet config/servicos.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898599+github-actions[bot]@users.noreply.github.com"
+            git add config/servicos.json
+            git commit -m "Endereço do serviço de erros [skip ci]"
+            git push
+          fi
