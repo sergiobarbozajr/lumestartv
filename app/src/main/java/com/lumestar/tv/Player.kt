@@ -311,12 +311,6 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         if (v is TextureView) { v.scaleX = sx; v.scaleY = sy }
     }
 
-    fun applyPicture() {
-        if (direto) { ai.key = "-"; applyAi() } // no direto o brilho/contraste/cor vai junto com a IA, na placa
-        else tv()?.setLayerPaint(Paint().apply { colorFilter = ColorMatrixColorFilter(videoMatrix()) })
-        layoutVideo()
-    }
-
     fun applySubStyle() {
         val sv = holder[2] as? SubtitleView ?: return
         val fg = if (PP.subColor == 1) 0xFFFFE14D.toInt() else 0xFFFFFFFF.toInt()
@@ -352,6 +346,12 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         }
         if (fx.isEmpty() && !ai.hadFx) return
         try { player.setVideoEffects(fx); ai.hadFx = fx.isNotEmpty() || ai.hadFx } catch (e: Throwable) { ai.cap = 0; SceneAi.on = false; aiLabel = "" }
+    }
+
+    fun applyPicture() {
+        if (direto) { ai.key = "-"; applyAi() } // no direto o brilho/contraste/cor vai junto com a IA, na placa
+        else tv()?.setLayerPaint(Paint().apply { colorFilter = ColorMatrixColorFilter(videoMatrix()) })
+        layoutVideo()
     }
 
     fun applyAiLabel() { aiLabel = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live).label + sceneTag() }
@@ -399,13 +399,6 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         if (best.modeId != cur.modeId) act.window.attributes = act.window.attributes.also { it.preferredDisplayModeId = best.modeId }
     }
 
-    /** Tira as faixas pretas: olha uma foto pequena do vídeo e mede as bordas escuras. */
-    fun autoBars() {
-        var achou = false
-        VideoOut.foto(vview(), 96, 54) { b -> achou = true; medirFaixas(b) }
-        if (!achou && vview() is TextureView) say("Ainda sem imagem para medir")
-    }
-
     fun medirFaixas(bmp: android.graphics.Bitmap) {
         fun dark(x: Int, y: Int): Boolean { val p = bmp.getPixel(x, y); return (((p shr 16) and 255) * 3 + ((p shr 8) and 255) * 6 + (p and 255)) / 10 < 20 }
         fun rowDark(y: Int) = (0 until 96 step 4).count { dark(it, y) } >= 22
@@ -421,6 +414,14 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         layoutVideo()
         say(if (PP.fitV == 0 && PP.fitH == 0) "Este vídeo não tem faixas pretas" else "Faixas removidas: " + listOfNotNull(if (PP.fitV > 0) "cima e baixo +${PP.fitV}%" else null, if (PP.fitH > 0) "laterais +${PP.fitH}%" else null).joinToString(" · "))
     }
+
+    /** Tira as faixas pretas: olha uma foto pequena do vídeo e mede as bordas escuras. */
+    fun autoBars() {
+        var achou = false
+        VideoOut.foto(vview(), 96, 54) { b -> achou = true; medirFaixas(b) }
+        if (!achou && vview() is TextureView) say("Ainda sem imagem para medir")
+    }
+
 
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
