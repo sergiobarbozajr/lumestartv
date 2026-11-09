@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
 
     // fotos ao vivo dos canais só com o app na tela
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    override fun onStart() { super.onStart(); Thumbs.ligado = true; Controle.ligarServidor() }
+    override fun onStart() { super.onStart(); Thumbs.ligado = true; Controle.atividade = java.lang.ref.WeakReference(this); Controle.ligarServidor() }
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    override fun onStop() { super.onStop(); Thumbs.ligado = false; Controle.desligarServidor() }
+    override fun onStop() { super.onStop(); Thumbs.ligado = false; Controle.desligarServidor(); if (Controle.atividade?.get() === this) Controle.atividade = null }
 }

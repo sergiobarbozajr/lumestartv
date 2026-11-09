@@ -1,6 +1,5 @@
 package com.lumestar.tv
 
-import android.app.Instrumentation
 import android.content.Context
 import android.media.AudioManager
 import android.view.KeyEvent
@@ -9,7 +8,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asImageBitmap
 import java.security.SecureRandom
-import java.util.concurrent.Executors
 
 /**
  * "Celular como controle": o celular (mesmo Wi-Fi) abre http://IP-da-TV:8765/controle e vira controle remoto.
@@ -20,8 +18,8 @@ import java.util.concurrent.Executors
 object Controle {
     private lateinit var app: Context
     private val rnd = SecureRandom()
-    private val fila = Executors.newSingleThreadExecutor()
-    private val inst = Instrumentation()
+    /** Tela do app aberta agora (as teclas do celular vão para ela). */
+    @Volatile var atividade: java.lang.ref.WeakReference<android.app.Activity>? = null
 
     /** Código mostrado na TV; muda toda vez que o app abre e ao desconectar os celulares. */
     var codigo = ""; private set
@@ -85,7 +83,15 @@ object Controle {
             }
         }
         val k = TECLAS[nome] ?: return false
-        fila.execute { try { inst.sendKeyDownUpSync(k) } catch (e: Throwable) {} }
+        // entrega a tecla direto para a tela do app (sem pedir ao sistema, que algumas TVs bloqueiam)
+        main.post {
+            val a = atividade?.get() ?: return@post
+            try {
+                val t = android.os.SystemClock.uptimeMillis()
+                a.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, k, 0, 0, -1, 0, 0, android.view.InputDevice.SOURCE_DPAD))
+                a.dispatchKeyEvent(KeyEvent(t, android.os.SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, k, 0, 0, -1, 0, 0, android.view.InputDevice.SOURCE_DPAD))
+            } catch (e: Throwable) { android.util.Log.w("LumeStar", "controle pelo celular: tecla $nome falhou", e) }
+        }
         return true
     }
 
