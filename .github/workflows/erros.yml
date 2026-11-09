@@ -54,3 +54,10 @@ jobs:
             git commit -m "Endereço do serviço de erros [skip ci]"
             git push
           fi
+      - name: Teste (manda um erro de teste quando rodado à mão)
+        if: steps.seg.outputs.ok == '1' && github.event_name == 'workflow_dispatch'
+        run: |
+          url=$(jq -r .erros config/servicos.json)
+          curl -s -X POST "$url" -H "X-Lume: lumestartv-1" -H "Content-Type: application/json" \
+            -d '{"app":"LumeStarTV","versao":"teste","aparelho":"GitHub Actions","tipo":"teste","assinatura":"00teste00","resumo":"Teste do serviço de erros (pode fechar)","texto":"Relatório de teste enviado ao instalar o serviço de erros."}'
+          echo
