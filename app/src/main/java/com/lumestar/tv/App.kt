@@ -424,6 +424,7 @@ private fun Block(st: AppState, i: Int, content: @Composable () -> Unit) {
 
 @Composable
 private fun Page(st: AppState, locked: Boolean) {
+    if (st.page == "modelos") { GaleriaModelos(); return }
     val n = MENU.firstOrNull { it.id == st.page } ?: MENU[0]
     Block(st, 1) {
         Box(Modifier.fillMaxSize()) {
@@ -435,7 +436,6 @@ private fun Page(st: AppState, locked: Boolean) {
                 "lancamentos" -> ReleasesPage(st, locked)
                 "aovivo" -> TabPage(st, "aovivo", "TV ao vivo", n.desc, locked, hero = true)
                 "radio" -> RadioPage(st, locked)
-                "modelos" -> GaleriaModelos()
                 "musicas" -> TabPage(st, "musicas", "Músicas", "Rádios e canais de música da sua lista, e os seus apps de música.", locked, hero = false, top = { MusicApps(st, locked) })
                 "streaming" -> StreamingPage(st, locked)
                 "assistente" -> AssistantPage(st, locked)
