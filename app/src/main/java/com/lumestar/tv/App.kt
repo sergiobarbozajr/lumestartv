@@ -35,6 +35,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -217,6 +218,11 @@ class LaunchArgs(val skipIntro: Boolean = false, val page: String? = null, val u
 @Composable
 fun LumeApp(prefs: Prefs, args: LaunchArgs = LaunchArgs(), finish: () -> Unit) {
     val st = remember { AppState(prefs) }
+    DisposableEffect(st) {
+        Controle.semTeclado = { t -> st.query = t; st.page = "pesquisa"; st.refocus++ }
+        Controle.aviso = { m -> st.say(m) }
+        onDispose { Controle.semTeclado = null; Controle.aviso = null }
+    }
     var phase by remember { mutableStateOf(if (prefs.intro && !args.skipIntro) "intro" else "open") }
 
     DesignScale {
@@ -429,6 +435,7 @@ private fun Page(st: AppState, locked: Boolean) {
                 "lancamentos" -> ReleasesPage(st, locked)
                 "aovivo" -> TabPage(st, "aovivo", "TV ao vivo", n.desc, locked, hero = true)
                 "radio" -> RadioPage(st, locked)
+                "modelos" -> GaleriaModelos()
                 "musicas" -> TabPage(st, "musicas", "Músicas", "Rádios e canais de música da sua lista, e os seus apps de música.", locked, hero = false, top = { MusicApps(st, locked) })
                 "streaming" -> StreamingPage(st, locked)
                 "assistente" -> AssistantPage(st, locked)
@@ -491,6 +498,7 @@ private val CFG = listOf(
     Cfg("som", "Som do aplicativo", 1, ""),
     Cfg("offline", "Canais fora do ar", 1, "Marca ou esconde os canais sem sinal."),
     Cfg("rede", "Rede e internet", 1, "Situação da conexão e teste de velocidade."),
+    Cfg("celular", "Controle pelo celular", 1, ""),
     Cfg("controle", "Mapear controle remoto", 1, "Escolha a tecla do controle para OK, Voltar, Play/Pausa e Favoritar."),
     Cfg("historico", "Limpar histórico", 1, ""),
     Cfg("adulto", "Conteúdo adulto", 1, "Bloqueio com PIN."),
@@ -631,6 +639,7 @@ private fun CfgPanel(st: AppState, c: Cfg, locked: Boolean) {
         "tema" -> ThemePanel(st, locked)
         "clima" -> WeatherPanel(st, locked)
         "controle" -> RemotePanel(st, locked)
+        "celular" -> CelularPanel(st, locked)
         else -> {
             T(c.desc, 13, C.muted, lineHeight = 19)
             Box(Modifier.clip(RoundedCornerShape(10.dp)).background(C.a2.copy(alpha = .18f)).padding(horizontal = 12.dp, vertical = 7.dp)) {

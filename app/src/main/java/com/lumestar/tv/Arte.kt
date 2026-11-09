@@ -89,21 +89,16 @@ fun LogoArte(nome: String, url: String, modifier: Modifier = Modifier, pad: Dp =
     }
 }
 
-/** Logo desenhado com o nome: letras grossas em degradê, com sombra, sobre um brilho. */
+/** Logo desenhado com o nome: letras grossas em degradê, com sombra; o tamanho diminui até caber no card. */
 @Composable
 fun NomeArte(nome: String, tamanho: Int = 18, modifier: Modifier = Modifier) {
-    val limpo = nome.replace(Regex("(?i)\\b(hd|fhd|sd|4k|uhd|h265)\\b|\\[[^]]*]|\\([^)]*\\)"), " ").replace(Regex("\\s+"), " ").trim().ifBlank { nome }
-    val t = if (limpo.length > 22) limpo.take(21) + "…" else limpo
-    Box(modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f), Color.Transparent))).padding(8.dp), contentAlignment = Alignment.Center) {
-        BasicText(
-            t,
-            style = TextStyle(
-                brush = Brush.linearGradient(listOf(Color.White, C.a1.copy(alpha = .95f).compositeOver(Color.White), C.a2)),
-                fontSize = (if (t.length > 12) tamanho - 4 else tamanho).sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center,
-                shadow = Shadow(Color(0xCC000000), Offset(0f, 3f), 8f), lineHeight = (tamanho + 2).sp,
-            ),
-            maxLines = 2,
-        )
+    val limpo = remember(nome) { nomeLimpo(nome) }
+    val tm = androidx.compose.ui.text.rememberTextMeasurer()
+    val a1 = C.a1; val a2 = C.a2
+    androidx.compose.foundation.Canvas(modifier.fillMaxSize()) {
+        val m = kotlin.math.min(size.width, size.height) * .1f
+        val r = androidx.compose.ui.geometry.Rect(m, m, size.width - m, size.height - m)
+        textoQueCabe(tm, limpo, r, Color.White, Brush.linearGradient(listOf(Color.White, a1.copy(alpha = .95f).compositeOver(Color.White), a2), r.topLeft, r.bottomRight))
     }
 }
 

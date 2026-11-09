@@ -328,6 +328,7 @@ private fun MHome(st: AppState, go: (String) -> Unit) {
             }
         }
         MRow(st, "Continuar assistindo", cont, setMenu, caption = { i -> Store.progress[i.id]?.let { p -> if (p.dur > 0) "${p.pos * 100 / p.dur}% assistido" else null } ?: i.title })
+        MRow(st, "Novidades da semana", Novidades.itens(Catalog.items), setMenu)
         MRow(st, "Lançamentos", Catalog.releases(), setMenu, more = { go("lancamentos") })
         val news = NewsState.list
         if (news.isNotEmpty()) Column(Modifier.padding(top = 18.dp)) {

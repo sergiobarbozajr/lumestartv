@@ -13,11 +13,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -27,60 +29,77 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
-/** Desenhos dos cards sem imagem. Todos seguem as cores do tema atual; só o nome muda. */
-enum class Modelo(val etiqueta: String) { CANAL(""), FILME("FILME"), SERIE("SÉRIE"), VIDEO("VÍDEO") }
+/**
+ * Desenhos dos cards sem imagem. Sem fundo de template: o próprio ícone ocupa o card e o nome
+ * fica DENTRO dele (tela da TV, claquete, balde de pipoca, círculo do play, visor do rádio),
+ * diminuindo sozinho até caber. Cores seguem o tema atual.
+ */
+enum class Modelo { CANAL, FILME, SERIE, VIDEO, RADIO }
+
+/** Tira HD/FHD/[..]/(..) do nome para sobrar só o que importa. */
+fun nomeLimpo(nome: String) = nome.replace(Regex("(?i)\\b(hd|fhd|sd|4k|uhd|h265)\\b|\\[[^]]*]|\\([^)]*\\)"), " ")
+    .replace(Regex("\\s+"), " ").trim().ifBlank { nome }
 
 @Composable
 fun ModeloCard(tipo: Modelo, nome: String, modifier: Modifier = Modifier, aoVivo: Boolean = tipo == Modelo.CANAL) {
-    val a1 = C.a1; val fg = C.fg; val bg = C.bg; val panel = C.panel
-    val limpo = nome.replace(Regex("(?i)\\b(hd|fhd|sd|4k|uhd|h265)\\b|\\[[^]]*]|\\([^)]*\\)"), " ").replace(Regex("\\s+"), " ").trim().ifBlank { nome }
-    BoxWithConstraints(modifier.background(bg)) {
-        val largo = maxWidth > maxHeight
+    val a1 = C.a1; val bg = C.bg
+    val limpo = remember(nome) { nomeLimpo(nome) }
+    val tm = rememberTextMeasurer()
+    Box(modifier.background(lerp(bg, a1, .07f))) {
         Canvas(Modifier.fillMaxSize()) {
-            val w = size.width; val h = size.height
-            // painel com borda luminosa
-            val ins = min(w, h) * .06f
-            drawRoundRect(panel.copy(alpha = .55f), Offset(ins, ins), Size(w - 2 * ins, h - 2 * ins), CornerRadius(ins * 1.4f))
-            drawRoundRect(a1.copy(alpha = .45f), Offset(ins, ins), Size(w - 2 * ins, h - 2 * ins), CornerRadius(ins * 1.4f), style = Stroke(1.2f))
-            val s = min(w, h) * (if (largo) .78f else .62f)
-            val cx = w / 2; val cy = h * (if (largo) .5f else .44f)
-            circuitos(cx, cy, s, a1)
-            drawCircle(Brush.radialGradient(listOf(a1.copy(alpha = .5f), Color.Transparent), Offset(cx, cy), s * .75f), s * .75f, Offset(cx, cy))
-            when (tipo) {
-                Modelo.CANAL -> tv(cx, cy, s, a1, bg)
-                Modelo.FILME -> claquete(cx, cy, s, a1, bg)
-                Modelo.SERIE -> pipoca(cx, cy, s, a1, bg)
-                Modelo.VIDEO -> play(cx, cy, s, a1, bg)
+            val m = min(size.width, size.height) * .05f
+            val caixa = Rect(m, m, size.width - m, size.height - m)
+            val texto: Pair<Rect, Color> = when (tipo) {
+                Modelo.CANAL -> tv(caixa, a1)
+                Modelo.FILME -> claquete(caixa, a1)
+                Modelo.SERIE -> pipoca(caixa, a1)
+                Modelo.VIDEO -> play(caixa, a1, bg)
+                Modelo.RADIO -> radio(caixa, a1)
             }
+            textoQueCabe(tm, limpo, texto.first, texto.second)
         }
-        val tam = if (largo) 12 else 13
-        if (tipo == Modelo.CANAL) {
-            // nome dentro da tela da TV
-            Box(Modifier.align(Alignment.Center).fillMaxWidth(if (largo) .42f else .6f).padding(top = if (largo) 6.dp else 4.dp), contentAlignment = Alignment.Center) {
-                BasicText(limpo, style = TextStyle(color = lerp(bg, Color.Black, .6f), fontSize = tam.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, lineHeight = (tam + 1).sp), maxLines = 2)
-            }
-        } else {
-            Column(Modifier.align(if (largo) Alignment.Center else Alignment.Center).fillMaxWidth().padding(horizontal = 6.dp).offset(y = if (largo) 0.dp else (-6).dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.clip(RoundedCornerShape(6.dp)).background(bg.copy(alpha = .85f)).padding(horizontal = 6.dp, vertical = 1.dp)) {
-                    BasicText(tipo.etiqueta, style = TextStyle(color = fg.copy(alpha = .8f), fontSize = 8.sp, fontWeight = FontWeight.Bold))
-                }
-                Box(Modifier.padding(top = 2.dp).fillMaxWidth().background(Brush.horizontalGradient(listOf(Color.Transparent, a1.copy(alpha = .35f), Color.Transparent))).padding(vertical = 3.dp), contentAlignment = Alignment.Center) {
-                    BasicText(limpo, style = TextStyle(color = fg, fontSize = tam.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, lineHeight = (tam + 1).sp,
-                        shadow = Shadow(Color.Black.copy(alpha = .8f), Offset(0f, 2f), 6f)), maxLines = 2)
-                }
-            }
-        }
-        if (aoVivo) AoVivo(Modifier.align(Alignment.TopEnd).padding(5.dp))
+        if (aoVivo) AoVivo(Modifier.align(Alignment.TopEnd).padding(4.dp))
     }
+}
+
+/**
+ * Escreve o texto centralizado dentro do retângulo, começando grande e diminuindo até caber
+ * (no máximo 2 linhas). Nunca sai do contorno do ícone.
+ */
+fun DrawScope.textoQueCabe(tm: TextMeasurer, texto: String, r: Rect, cor: Color, brush: Brush? = null, maxLinhas: Int = 2) {
+    if (r.width < 6f || r.height < 6f) return
+    val clara = cor.red * .3f + cor.green * .59f + cor.blue * .11f > .5f
+    var fs = min(r.height * .46f, r.width * .26f)
+    val minimo = 6.dp.toPx()
+    var lay: TextLayoutResult
+    while (true) {
+        val base = TextStyle(
+            color = cor, fontSize = fs.toSp(), lineHeight = (fs * 1.08f).toSp(), fontWeight = FontWeight.Black, textAlign = TextAlign.Center,
+            shadow = if (clara) Shadow(Color.Black.copy(alpha = .7f), Offset(0f, 1.5f), 4f) else null,
+        )
+        val estilo = if (brush != null) base.merge(TextStyle(brush = brush)) else base
+        lay = tm.measure(texto, estilo, TextOverflow.Ellipsis, true, maxLinhas, Constraints.fixedWidth(r.width.toInt().coerceAtLeast(1)))
+        val cabe = !lay.hasVisualOverflow && lay.size.height <= r.height && (0 until lay.lineCount).none { lay.isLineEllipsized(it) }
+        if (cabe || fs <= minimo) break
+        fs *= .9f
+    }
+    drawText(lay, topLeft = Offset(r.left, r.top + (r.height - lay.size.height) / 2))
 }
 
 /** Selo pequeno "● AO VIVO" com a bolinha vermelha piscando de leve. */
@@ -95,116 +114,167 @@ fun AoVivo(modifier: Modifier = Modifier) {
     }
 }
 
-private fun DrawScope.circuitos(cx: Float, cy: Float, s: Float, a1: Color) {
-    val c = a1.copy(alpha = .35f); val w = size.width
-    for (lado in listOf(-1f, 1f)) for (i in 0 until 5) {
-        val y0 = cy - s * .38f + i * s * .19f
-        val x0 = cx + lado * s * .45f
-        val jog = s * (.08f + (i % 3) * .05f)
-        val x1 = x0 + lado * s * .18f
-        val y1 = y0 + (if (i < 2) -jog else if (i > 2) jog else 0f)
-        val x2 = if (lado < 0) w * (.04f + i * .02f) else w * (.96f - i * .02f)
-        val p = Path().apply { moveTo(x0, y0); lineTo(x1, y1); lineTo(x2, y1) }
-        drawPath(p, c, style = Stroke(1.1f))
-        drawCircle(a1.copy(alpha = .6f), 1.8f, Offset(x2, y1))
-    }
-    // pontos de luz
-    for (k in 0 until 10) {
-        val ang = k * 0.63f; val r = s * (.55f + (k % 4) * .08f)
-        drawCircle(a1.copy(alpha = .5f), 1.3f, Offset(cx + cos(ang) * r, cy + sin(ang) * r * .6f))
-    }
-}
-
 private val METAL = listOf(Color(0xFFE2E7EF), Color(0xFF9AA4B4))
+private val ESCURO = Color(0xFF232A35)
 
-private fun DrawScope.tv(cx: Float, cy: Float, s: Float, a1: Color, bg: Color) {
-    val bw = s * 1.0f; val bh = s * .66f; val x = cx - bw / 2; val y = cy - bh * .42f
-    // antenas
-    val topo = Offset(cx, y)
-    drawLine(Color(0xFFB8C2D6), topo, Offset(cx - s * .3f, y - s * .38f), 2.2f); drawCircle(Color(0xFFDDE3EC), 2.6f, Offset(cx - s * .3f, y - s * .38f))
-    drawLine(Color(0xFFB8C2D6), topo, Offset(cx + s * .24f, y - s * .42f), 2.2f); drawCircle(Color(0xFFDDE3EC), 2.6f, Offset(cx + s * .24f, y - s * .42f))
-    drawArc(Brush.verticalGradient(METAL), 180f, 180f, true, Offset(cx - s * .1f, y - s * .07f), Size(s * .2f, s * .14f))
-    // pés
-    drawRect(Color(0xFF7D8798), Offset(x + bw * .2f, y + bh), Size(bw * .08f, s * .06f))
-    drawRect(Color(0xFF7D8798), Offset(x + bw * .72f, y + bh), Size(bw * .08f, s * .06f))
-    // corpo metálico e tela
-    drawRoundRect(Brush.verticalGradient(METAL, y, y + bh), Offset(x, y), Size(bw, bh), CornerRadius(s * .07f))
-    drawRoundRect(Color(0xFF2A2F38), Offset(x + bw * .06f, y + bh * .1f), Size(bw * .72f, bh * .78f), CornerRadius(s * .05f))
-    drawRoundRect(Brush.linearGradient(listOf(Color.White, lerp(Color.White, a1, .18f))), Offset(x + bw * .09f, y + bh * .15f), Size(bw * .66f, bh * .68f), CornerRadius(s * .04f))
-    // botões
+/** Encaixa uma figura de proporção [prop] (largura/altura) centralizada na caixa. */
+private fun encaixe(c: Rect, prop: Float): Rect {
+    val w = min(c.width, c.height * prop); val h = w / prop
+    return Rect(c.center.x - w / 2, c.center.y - h / 2, c.center.x + w / 2, c.center.y + h / 2)
+}
+
+/** TV antiga com antenas. O nome vai na tela. */
+private fun DrawScope.tv(caixa: Rect, a1: Color): Pair<Rect, Color> {
+    val f = encaixe(caixa, 1.45f)
+    val ant = f.height * .16f; val pe = f.height * .05f
+    val x = f.left; val y = f.top + ant; val bw = f.width; val bh = f.height - ant - pe
+    val topo = Offset(f.center.x, y)
+    val e = (f.height * .025f).coerceAtLeast(1.5f)
+    drawLine(Color(0xFFB8C2D6), topo, Offset(f.center.x - bw * .2f, f.top + e), e); drawCircle(Color(0xFFDDE3EC), e * 1.3f, Offset(f.center.x - bw * .2f, f.top + e))
+    drawLine(Color(0xFFB8C2D6), topo, Offset(f.center.x + bw * .16f, f.top + e), e); drawCircle(Color(0xFFDDE3EC), e * 1.3f, Offset(f.center.x + bw * .16f, f.top + e))
+    drawArc(Brush.verticalGradient(METAL), 180f, 180f, true, Offset(f.center.x - bw * .07f, y - ant * .35f), Size(bw * .14f, ant * .7f))
+    drawRect(Color(0xFF7D8798), Offset(x + bw * .18f, y + bh), Size(bw * .07f, pe))
+    drawRect(Color(0xFF7D8798), Offset(x + bw * .75f, y + bh), Size(bw * .07f, pe))
+    val r = bh * .1f
+    drawRoundRect(Brush.verticalGradient(METAL, y, y + bh), Offset(x, y), Size(bw, bh), CornerRadius(r))
+    // tela grande (quase todo o corpo) e coluna de botões estreita
+    val tela = Rect(x + bw * .05f, y + bh * .08f, x + bw * .84f, y + bh * .92f)
+    drawRoundRect(Color(0xFF2A2F38), tela.topLeft, tela.size, CornerRadius(r * .8f))
+    val vidro = Rect(tela.left + bw * .02f, tela.top + bh * .04f, tela.right - bw * .02f, tela.bottom - bh * .04f)
+    drawRoundRect(Brush.linearGradient(listOf(Color.White, lerp(Color.White, a1, .22f)), vidro.topLeft, vidro.bottomRight), vidro.topLeft, vidro.size, CornerRadius(r * .6f))
     for (k in 0..1) {
-        val cc = Offset(x + bw * .87f, y + bh * (.35f + k * .3f))
-        drawCircle(Color(0xFF8A94A5), s * .045f, cc); drawCircle(Color(0xFFE8ECF2), s * .03f, cc)
+        val cc = Offset(x + bw * .92f, y + bh * (.32f + k * .32f))
+        drawCircle(Color(0xFF8A94A5), bw * .03f, cc); drawCircle(Color(0xFFE8ECF2), bw * .02f, cc)
     }
-    drawRoundRect(a1.copy(alpha = .55f), Offset(x, y), Size(bw, bh), CornerRadius(s * .07f), style = Stroke(1.2f))
+    drawRoundRect(a1.copy(alpha = .6f), Offset(x, y), Size(bw, bh), CornerRadius(r), style = Stroke(1.2f))
+    return vidro.deflate(vidro.height * .08f) to Color(0xFF151A22)
 }
 
-private fun DrawScope.claquete(cx: Float, cy: Float, s: Float, a1: Color, bg: Color) {
-    val bw = s * .95f; val x = cx - bw / 2; val y = cy - s * .12f; val bh = s * .52f
-    val escuro = Color(0xFF232A35)
-    drawRoundRect(escuro, Offset(x, y), Size(bw, bh), CornerRadius(s * .05f))
-    // faixa listrada do corpo
-    listras(Offset(x, y), Size(bw, s * .1f), escuro)
-    // tampa inclinada
-    rotate(-12f, Offset(x, y)) {
-        listras(Offset(x, y - s * .14f), Size(bw * .98f, s * .11f), escuro)
-    }
-    drawCircle(Color.White, s * .035f, Offset(x + s * .04f, y + s * .02f))
-    drawRoundRect(a1.copy(alpha = .5f), Offset(x, y), Size(bw, bh), CornerRadius(s * .05f), style = Stroke(1.2f))
+/** Claquete de cinema. O nome vai na lousa. */
+private fun DrawScope.claquete(caixa: Rect, a1: Color): Pair<Rect, Color> {
+    val f = encaixe(caixa, 1.25f)
+    val tampa = f.height * .15f; val folga = f.height * .1f
+    val x = f.left; val bw = f.width; val y = f.top + tampa + folga; val bh = f.bottom - y
+    val r = bh * .06f
+    drawRoundRect(ESCURO, Offset(x, y), Size(bw, bh), CornerRadius(r))
+    listras(Offset(x, y), Size(bw, bh * .17f))
+    // tampa inclinada: o ângulo é limitado para a ponta não sair do card
+    val ang = Math.toDegrees(asin(((folga + tampa * .2f) / bw).toDouble().coerceIn(0.0, .2))).toFloat()
+    rotate(-ang, Offset(x, y)) { listras(Offset(x, y - tampa - 1f), Size(bw * .98f, tampa)) }
+    drawCircle(Color.White, bh * .035f, Offset(x + bh * .05f, y + bh * .02f))
+    drawRoundRect(a1.copy(alpha = .55f), Offset(x, y), Size(bw, bh), CornerRadius(r), style = Stroke(1.2f))
+    // linha de giz sob o nome
+    val lousa = Rect(x + bw * .07f, y + bh * .24f, x + bw * .93f, y + bh * .9f)
+    drawLine(Color.White.copy(alpha = .18f), Offset(lousa.left, lousa.bottom), Offset(lousa.right, lousa.bottom), 1f)
+    return lousa to Color.White
 }
 
-private fun DrawScope.listras(o: Offset, t: Size, escuro: Color) {
-    drawRect(escuro, o, t)
-    val n = 5; val passo = t.width / n
+private fun DrawScope.listras(o: Offset, t: Size) {
+    drawRect(ESCURO, o, t)
+    val n = 6; val passo = t.width / n
     for (i in 0 until n) {
         val p = Path().apply {
-            moveTo(o.x + i * passo + passo * .25f, o.y + t.height); lineTo(o.x + i * passo + passo * .55f, o.y)
+            moveTo(o.x + i * passo + passo * .2f, o.y + t.height); lineTo(o.x + i * passo + passo * .5f, o.y)
             lineTo(o.x + i * passo + passo * .85f, o.y); lineTo(o.x + i * passo + passo * .55f, o.y + t.height); close()
         }
         drawPath(p, Color(0xFFF2F4F8))
     }
 }
 
-private fun DrawScope.pipoca(cx: Float, cy: Float, s: Float, a1: Color, bg: Color) {
-    // balde listrado
-    val x0 = cx - s * .52f; val x1 = cx + s * .08f; val y0 = cy - s * .12f; val y1 = cy + s * .42f
-    val balde = Path().apply { moveTo(x0, y0); lineTo(x1, y0); lineTo(x1 - s * .07f, y1); lineTo(x0 + s * .07f, y1); close() }
-    drawPath(balde, Color(0xFF2B323D))
-    for (i in 0 until 4) {
-        val a = x0 + (x1 - x0) * (i / 4f) + s * .02f; val b = a + (x1 - x0) / 8f
-        val p = Path().apply { moveTo(a, y0); lineTo(b, y0); lineTo(b - s * .02f, y1); lineTo(a + s * .01f, y1); close() }
-        drawPath(p, Brush.verticalGradient(METAL, y0, y1))
+/** Balde de pipoca com controle remoto encostado. O nome vai na etiqueta do balde. */
+private fun DrawScope.pipoca(caixa: Rect, a1: Color): Pair<Rect, Color> {
+    val f = encaixe(caixa, 1.0f)
+    val topoPipoca = f.height * .2f
+    val y0 = f.top + topoPipoca; val y1 = f.bottom
+    val x0 = f.left + f.width * .04f; val x1 = f.right - f.width * .1f
+    // controle remoto atrás, à direita
+    val rw = f.width * .2f; val rh = f.height * .62f; val rx = f.right - rw; val ry = f.top + f.height * .06f
+    rotate(12f, Offset(rx + rw / 2, ry + rh / 2)) {
+        drawRoundRect(Color(0xFF2B323D), Offset(rx, ry), Size(rw, rh), CornerRadius(rw * .3f))
+        drawRoundRect(Brush.verticalGradient(METAL, ry, ry + rh), Offset(rx, ry), Size(rw, rh), CornerRadius(rw * .3f), style = Stroke(1.5f))
+        drawCircle(Color(0xFF8A94A5), rw * .28f, Offset(rx + rw / 2, ry + rh * .22f))
     }
     // pipocas
     val creme = Color(0xFFF3EBD8)
-    for (i in 0 until 9) {
-        val px = x0 + s * .05f + (i % 5) * (x1 - x0 - s * .1f) / 4f
-        val py = y0 - s * (.05f + (i / 5) * .1f + (i % 2) * .03f)
-        drawCircle(creme, s * .065f, Offset(px, py)); drawCircle(Color(0xFFD9CDB2), s * .065f, Offset(px, py), style = Stroke(1f))
+    val rp = (x1 - x0) * .085f
+    for (i in 0 until 11) {
+        val px = x0 + rp + (i % 6) * (x1 - x0 - 2 * rp) / 5f
+        val py = y0 - rp * (.4f + (i / 6) * 1.3f + (i % 2) * .5f)
+        drawCircle(creme, rp, Offset(px, py)); drawCircle(Color(0xFFD9CDB2), rp, Offset(px, py), style = Stroke(1f))
     }
-    // controle remoto
-    val rx = cx + s * .16f; val ry = cy - s * .45f; val rw = s * .3f; val rh = s * .88f
-    drawRoundRect(Color(0xFF2B323D), Offset(rx, ry), Size(rw, rh), CornerRadius(s * .08f))
-    drawRoundRect(Brush.verticalGradient(METAL, ry, ry + rh), Offset(rx, ry), Size(rw, rh), CornerRadius(s * .08f), style = Stroke(1.5f))
-    val dc = Offset(rx + rw / 2, ry + rh * .3f)
-    drawCircle(Color(0xFF8A94A5), rw * .3f, dc); drawCircle(Color(0xFF2B323D), rw * .14f, dc)
-    for (k in 0 until 3) for (j in 0..1) drawRoundRect(Color(0xFF8A94A5), Offset(rx + rw * (.18f + j * .38f), ry + rh * (.58f + k * .1f)), Size(rw * .26f, rh * .05f), CornerRadius(3f))
-    drawRoundRect(a1.copy(alpha = .5f), Offset(rx, ry), Size(rw, rh), CornerRadius(s * .08f), style = Stroke(1.2f))
+    // balde listrado
+    val inc = (x1 - x0) * .08f
+    val balde = Path().apply { moveTo(x0, y0); lineTo(x1, y0); lineTo(x1 - inc, y1); lineTo(x0 + inc, y1); close() }
+    drawPath(balde, Color(0xFF2B323D))
+    for (i in 0 until 5) {
+        val a = x0 + (x1 - x0) * (i / 5f) + (x1 - x0) * .03f; val b = a + (x1 - x0) / 10f
+        val p = Path().apply { moveTo(a, y0); lineTo(b, y0); lineTo(b - inc * .3f, y1); lineTo(a + inc * .3f, y1); close() }
+        drawPath(p, Brush.verticalGradient(METAL, y0, y1))
+    }
+    drawPath(balde, a1.copy(alpha = .55f), style = Stroke(1.2f))
+    // etiqueta onde vai o nome
+    val h = y1 - y0
+    val et = Rect(x0 + inc + (x1 - x0) * .02f, y0 + h * .24f, x1 - inc - (x1 - x0) * .02f, y0 + h * .8f)
+    drawRoundRect(Color(0xF01B2029), et.topLeft, et.size, CornerRadius(et.height * .12f))
+    drawRoundRect(a1.copy(alpha = .7f), et.topLeft, et.size, CornerRadius(et.height * .12f), style = Stroke(1.2f))
+    return et.deflate(et.height * .08f) to Color.White
 }
 
-private fun DrawScope.play(cx: Float, cy: Float, s: Float, a1: Color, bg: Color) {
-    val r = s * .45f; val c = Offset(cx, cy)
+/** Círculo com botão de play e órbita. O nome vai na metade de baixo do círculo. */
+private fun DrawScope.play(caixa: Rect, a1: Color, bg: Color): Pair<Rect, Color> {
+    val f = encaixe(caixa, 1f)
+    val r = f.width / 2; val c = f.center
     drawCircle(Brush.radialGradient(listOf(Color(0xFF4A5566), Color(0xFF1F2530)), c, r), r, c)
-    // malha geométrica
-    val pts = (0 until 9).map { k -> val ang = k * 0.7f + 0.3f; val rr = r * (.35f + (k % 3) * .25f); Offset(cx + cos(ang) * rr, cy + sin(ang) * rr) }
-    for (i in pts.indices) for (j in i + 1 until pts.size) if ((i + j) % 3 == 0) drawLine(a1.copy(alpha = .35f), pts[i], pts[j], 1f)
-    pts.forEach { drawCircle(a1.copy(alpha = .7f), 1.6f, it) }
-    // órbita
-    rotate(-22f, c) { drawOval(a1.copy(alpha = .85f), Offset(cx - r * 1.15f, cy - r * .42f), Size(r * 2.3f, r * .84f), style = Stroke(s * .05f)) }
-    // botão de play
-    val q = s * .42f
-    drawRoundRect(lerp(bg, a1, .35f), Offset(cx - q / 2, cy - q * .95f), Size(q, q), CornerRadius(q * .25f))
-    drawRoundRect(a1, Offset(cx - q / 2, cy - q * .95f), Size(q, q), CornerRadius(q * .25f), style = Stroke(2f))
-    val tri = Path().apply { moveTo(cx - q * .16f, cy - q * .72f); lineTo(cx + q * .24f, cy - q * .45f); lineTo(cx - q * .16f, cy - q * .18f); close() }
+    rotate(-18f, c) { drawOval(a1.copy(alpha = .45f), Offset(c.x - r * .98f, c.y - r * .36f), Size(r * 1.96f, r * .72f), style = Stroke(r * .04f)) }
+    drawCircle(a1.copy(alpha = .6f), r, c, style = Stroke(1.2f))
+    val q = r * .56f
+    val bt = Offset(c.x - q / 2, c.y - r * .78f)
+    drawRoundRect(lerp(bg, a1, .35f), bt, Size(q, q), CornerRadius(q * .25f))
+    drawRoundRect(a1, bt, Size(q, q), CornerRadius(q * .25f), style = Stroke(2f))
+    val tri = Path().apply { moveTo(bt.x + q * .34f, bt.y + q * .24f); lineTo(bt.x + q * .74f, bt.y + q * .5f); lineTo(bt.x + q * .34f, bt.y + q * .76f); close() }
     drawPath(tri, Brush.linearGradient(listOf(Color.White, a1)))
+    // faixa de texto: corda do círculo, larga o bastante para não encostar na borda
+    return Rect(c.x - r * .8f, c.y - r * .1f, c.x + r * .8f, c.y + r * .55f) to Color.White
+}
+
+/** Rádio antigo com alça. O nome vai no visor. */
+private fun DrawScope.radio(caixa: Rect, a1: Color): Pair<Rect, Color> {
+    val f = encaixe(caixa, 1.4f)
+    val alca = f.height * .14f
+    val x = f.left; val y = f.top + alca; val bw = f.width; val bh = f.height - alca
+    val e = (bh * .045f).coerceAtLeast(2f)
+    drawRoundRect(Color(0xFFB8C2D6), Offset(x + bw * .22f, f.top + e / 2), Size(bw * .56f, alca * 1.6f), CornerRadius(alca), style = Stroke(e))
+    drawRoundRect(Brush.verticalGradient(METAL, y, y + bh), Offset(x, y), Size(bw, bh), CornerRadius(bh * .1f))
+    // visor (largo, em cima) com o nome
+    val visor = Rect(x + bw * .06f, y + bh * .1f, x + bw * .94f, y + bh * .52f)
+    drawRoundRect(Color(0xFF151A22), visor.topLeft, visor.size, CornerRadius(bh * .05f))
+    drawRoundRect(a1.copy(alpha = .8f), visor.topLeft, visor.size, CornerRadius(bh * .05f), style = Stroke(1.2f))
+    // alto-falante e botões
+    val gy = y + bh * .6f; val gh = bh * .3f
+    val cx = x + bw * .3f; val cy = gy + gh / 2
+    drawCircle(Color(0xFF2B323D), gh * .55f, Offset(cx, cy))
+    for (i in -2..2) for (j in -2..2) if (i * i + j * j <= 5) drawCircle(Color(0xFF8A94A5), gh * .05f, Offset(cx + i * gh * .17f, cy + j * gh * .17f))
+    for (k in 0..1) {
+        val cc = Offset(x + bw * (.66f + k * .16f), cy)
+        drawCircle(Color(0xFF8A94A5), gh * .32f, cc); drawCircle(Color(0xFFE8ECF2), gh * .2f, cc)
+    }
+    drawRoundRect(a1.copy(alpha = .55f), Offset(x, y), Size(bw, bh), CornerRadius(bh * .1f), style = Stroke(1.2f))
+    return visor.deflate(visor.height * .1f) to lerp(Color.White, a1, .35f)
+}
+
+/** Página escondida (só pelo teste: --es pagina modelos) para conferir os desenhos com nomes curtos e longos. */
+@Composable
+fun GaleriaModelos() {
+    val nomes = listOf("SBT", "Canal Rural", "TV Assembleia Legislativa do Estado do Rio de Janeiro HD")
+    Column(Modifier.fillMaxSize().padding(start = 120.dp, top = 20.dp, end = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        for (largo in listOf(true, false)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (t in Modelo.values()) for (n in if (largo) nomes.take(2) else nomes.drop(1).take(1) + nomes.last()) {
+                val mod = if (largo) Modifier.size(96.dp, 54.dp) else Modifier.size(56.dp, 84.dp)
+                ModeloCard(t, if (t == Modelo.CANAL || t == Modelo.RADIO) n else if (n == "SBT") "Up" else "O Homem que Sabia Demais e Outras Histórias", mod.clip(RoundedCornerShape(8.dp)))
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (t in Modelo.values()) ModeloCard(t, nomes.last(), Modifier.size(160.dp, 90.dp).clip(RoundedCornerShape(10.dp)))
+        }
+    }
 }

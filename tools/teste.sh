@@ -120,6 +120,15 @@ abre --es pagina filmes
 sleep 4; shot "filmes_modelos"
 abre --es pagina radio
 sleep 6; shot "radio"
+abre --es pagina modelos
+sleep 4; shot "modelos_galeria"
+# celular como controle: página de pareamento abre e tecla sem código é recusada
+adb forward tcp:8765 tcp:8765
+curl -s -m 10 http://127.0.0.1:8765/controle | grep -q "Controle pelo celular" && echo "controle: pagina ok" >> teste/resumo_extra.txt || echo "controle: pagina FALHOU" >> teste/resumo_extra.txt
+[ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -d k=ok http://127.0.0.1:8765/tecla)" = "403" ] && echo "controle: sem codigo recusado" >> teste/resumo_extra.txt || echo "controle: seguranca FALHOU" >> teste/resumo_extra.txt
+abre --es pagina config
+for i in $(seq 1 16); do key KEYCODE_DPAD_DOWN 0.3; done
+sleep 1; shot "config_celular"
 abre --es pagina streaming
 sleep 3; shot "streaming_logos"
 abre --es pagina cfg:sobre

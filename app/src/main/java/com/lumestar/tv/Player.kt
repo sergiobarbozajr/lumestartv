@@ -43,6 +43,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -194,7 +196,8 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         }
         ok = OkHttpDataSource.Factory(b.build()).setUserAgent(UA_APP)
         ds = DefaultDataSource.Factory(ctx, ok)
-        msf = DefaultMediaSourceFactory(ds)
+        // mais paciência com servidores instáveis: cada pedaço de vídeo tenta de novo até 6 vezes antes de dar erro
+        msf = DefaultMediaSourceFactory(ds).setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(6))
         val cache = cacheMs.coerceIn(300, 10000)
         val load = DefaultLoadControl.Builder().setBufferDurationsMs(maxOf(15000, cache * 3), 50000, cache, maxOf(1000, cache * 2)).build()
         val rf = object : DefaultRenderersFactory(ctx) {
@@ -220,10 +223,14 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         player.trackSelectionParameters = p.build()
     }
 
+    /** Liga quando um endereço sem ".m3u8" se revela uma lista HLS (comum em canais ao vivo). */
+    var forcarHls = false
+
     fun item(url: String, subUrl: String?): MediaItem {
         val low = url.lowercase()
         val b = MediaItem.Builder().setUri(url)
         when {
+            forcarHls -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
             low.contains(".m3u8") -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
             low.contains(".mpd") -> b.setMimeType(MimeTypes.APPLICATION_MPD)
         }
@@ -234,7 +241,9 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         return b.build()
     }
 
+    private var ultimo = ""
     fun load(url: String, subUrl: String?, audioUrl: String?, startMs: Long) {
+        if (url != ultimo) { forcarHls = false; ultimo = url }
         val main = msf.createMediaSource(item(url, subUrl))
         val src = if (!audioUrl.isNullOrBlank()) MergingMediaSource(main, ProgressiveMediaSource.Factory(ds).createMediaSource(MediaItem.fromUri(audioUrl))) else main
         player.setMediaSource(src, startMs.coerceAtLeast(0))
@@ -258,6 +267,8 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     var subUrl by remember { mutableStateOf<String?>(null) }
     var audioUrl by remember { mutableStateOf<String?>(null) }
     var triedTs by remember { mutableStateOf(false) }
+    var rapidas by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
     var playing by remember { mutableStateOf(true) }
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }
@@ -428,7 +439,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             override fun onPlaybackStateChanged(s: Int) {
                 buffering = s == Player.STATE_BUFFERING
                 if (s == Player.STATE_BUFFERING && dur >= 0 && pos > 0) PlayerDiag.rebuffers++
-                if (s == Player.STATE_READY) { err = null; dur = player.duration.coerceAtLeast(0); matchRate() }
+                if (s == Player.STATE_READY) { err = null; rapidas = 0; dur = player.duration.coerceAtLeast(0); matchRate() }
                 if (s == Player.STATE_ENDED && !req.live) { save(); st.closePlayer() }
             }
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
@@ -454,6 +465,16 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 val bad = e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                 if (bad && !triedVlc) { triedVlc = true; eng.ok.setUserAgent(UA_VLC); startAt = player.currentPosition; attempt++; return }
                 if (req.live && !triedTs && url.contains(".m3u8") && req.ext == "ts") { triedTs = true; url = url.replace(".m3u8", ".ts"); attempt++; return }
+                // ao vivo ficou para trás da janela da transmissão: volta para o ponto ao vivo sem mostrar erro
+                if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) { player.seekToDefaultPosition(); player.prepare(); return }
+                // endereço sem extensão que na verdade é HLS: tenta de novo como HLS
+                if (!eng.forcarHls && e.errorCode in 3000..3999 && !url.lowercase().contains(".m3u8") && !url.lowercase().contains(".mpd")) { eng.forcarHls = true; startAt = player.currentPosition; attempt++; return }
+                // queda rápida de rede: até 3 novas tentativas silenciosas (2 s, 4 s, 6 s) antes de mostrar o aviso
+                if (e.errorCode in 2000..2999 && rapidas < 3) {
+                    rapidas++; val pos = player.currentPosition
+                    scope.launch { delay(2000L * rapidas); startAt = pos; attempt++ }
+                    return
+                }
                 PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' '); PlayerDiag.lastTitle = req.title; PlayerDiag.lastAt = System.currentTimeMillis()
                 err = "Não foi possível reproduzir (${e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')})."
                 wait = 30

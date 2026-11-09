@@ -209,3 +209,34 @@ fun AdultPanel(st: AppState, locked: Boolean) {
         }
     }
 }
+
+/** Configurações › Controle pelo celular: endereço, código de pareamento e desconectar. */
+@Composable
+fun CelularPanel(st: AppState, locked: Boolean) {
+    var tick by remember { mutableIntStateOf(0) }
+    tick.let { }
+    val ip = remember { PhoneServer.address() }
+    T("O celular vira controle remoto da TV: setas, OK, Voltar, Play/Pausa, volume e um campo para digitar (pesquisa e senhas). Funciona com o celular no mesmo Wi-Fi e o LumeStarTV aberto na TV.", 13, C.muted, lineHeight = 19)
+    if (PP.controleCelular) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.a2.copy(alpha = .12f)).border(1.dp, C.a2.copy(alpha = .4f), RoundedCornerShape(12.dp)).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (ip == null) T("A TV não está conectada a uma rede.", 13, C.fg, FontWeight.SemiBold)
+            else {
+                T("1. No celular, abra no navegador:", 12, C.muted)
+                T("http://$ip:${PhoneServer.PORT}/controle", 20, C.fg, FontWeight.ExtraBold)
+                T("2. Digite o código (só na primeira vez em cada celular):", 12, C.muted)
+                T(Controle.codigo.toCharArray().joinToString("  "), 30, C.a1, FontWeight.ExtraBold)
+            }
+        }
+    }
+    KV(listOf("Situação" to if (PP.controleCelular) "Ligado" else "Desligado", "Celulares conectados" to "${Controle.conectados}"))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Btn(if (PP.controleCelular) "Desligar" else "Ligar", locked = locked, primary = !PP.controleCelular) {
+            PP.controleCelular = !PP.controleCelular
+            if (PP.controleCelular) Controle.ligarServidor() else Controle.desligarServidor()
+            tick++; st.say(if (PP.controleCelular) "Controle pelo celular ligado" else "Controle pelo celular desligado")
+        }
+        if (Controle.conectados > 0) Btn("Desconectar celulares", locked = locked) { Controle.desconectarTodos(); tick++; st.say("Celulares desconectados. Código novo na tela.") }
+    }
+    T("Segurança: só celulares que digitarem o código controlam a TV. 5 códigos errados bloqueiam por 1 minuto. \"Desconectar celulares\" apaga todos e troca o código.", 11, C.dim, lineHeight = 16)
+}

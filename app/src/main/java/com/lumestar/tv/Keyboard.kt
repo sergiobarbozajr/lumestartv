@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,11 @@ fun Keyboard(st: AppState, t: KbTarget) {
         st.kb = null
         val r = t.ret
         if (r != null) st.focusLater(r) else st.refocus++
+    }
+    DisposableEffect(t) {
+        val h: (String) -> Unit = { s -> close(); t.done(s) }
+        Controle.noTeclado = h
+        onDispose { if (Controle.noTeclado === h) Controle.noTeclado = null }
     }
     fun type(s: String) { draft += if (caps && s.length == 1) s.uppercase() else s; Sfx.kb() }
     BackHandler { close() }

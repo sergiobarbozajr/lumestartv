@@ -166,7 +166,7 @@ fun RadioPage(st: AppState, locked: Boolean) {
         Radio.tocando?.let { e ->
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.panel).border(1.dp, C.a1, RoundedCornerShape(14.dp)).padding(12.dp).focusGroup(),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LogoArte(e.nome, e.logo, Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)), pad = 6.dp, tamanhoNome = 11)
+                LogoArte(e.nome, e.logo, Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)), pad = 6.dp, tamanhoNome = 11) { ModeloCard(Modelo.RADIO, e.nome, Modifier.fillMaxSize(), aoVivo = false) }
                 Column(Modifier.weight(1f)) {
                     T("TOCANDO AGORA", 10, C.a1, FontWeight.Bold)
                     T(e.nome, 16, C.fg, FontWeight.Bold, maxLines = 1)
@@ -244,7 +244,7 @@ private fun CardRadio(ctx: Context, e: Estacao, locked: Boolean) {
                 .onFocusChanged { val n = it.isFocused; if (n && !f) Sfx.tick(); f = n }
                 .clickable(remember { MutableInteractionSource() }, null) { Sfx.ok(); Radio.tocar(ctx, e) }
         ) {
-            LogoArte(e.nome, e.logo, Modifier.fillMaxSize(), pad = 8.dp, tamanhoNome = 13)
+            LogoArte(e.nome, e.logo, Modifier.fillMaxSize(), pad = 8.dp, tamanhoNome = 13) { ModeloCard(Modelo.RADIO, e.nome, Modifier.fillMaxSize(), aoVivo = false) }
             if (ativo) Box(Modifier.align(Alignment.TopEnd).padding(4.dp).clip(RoundedCornerShape(6.dp)).background(C.a1).padding(horizontal = 5.dp, vertical = 1.dp)) { T("NO AR", 8, Color(0xFF050816), FontWeight.Bold) }
         }
         T(e.nome, 11, if (f) C.fg else C.muted, FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(top = 4.dp))

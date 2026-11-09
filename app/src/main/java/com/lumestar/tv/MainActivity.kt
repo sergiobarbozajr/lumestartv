@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         Store.init(this); Store.listasDeFabrica()
         Secret.init(this) // antes de qualquer senha ser lida (proxy, TMDB, contas)
         PP.init(this)
-        Tmdb.init(this); Logos.init(this); ImageAi.initTela(this); Reporter.init(this)
+        Tmdb.init(this); Logos.init(this); ImageAi.initTela(this); Reporter.init(this); Novidades.init(this); Controle.init(this)
         // diagnóstico de imagem: uma vez por versão, em segundo plano, 20 s depois de abrir (fora da abertura)
         Perf.init(this, prefs.perf)
         if (Perf.lite) {
@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
 
     // fotos ao vivo dos canais só com o app na tela
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    override fun onStart() { super.onStart(); Thumbs.ligado = true }
+    override fun onStart() { super.onStart(); Thumbs.ligado = true; Controle.ligarServidor() }
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    override fun onStop() { super.onStop(); Thumbs.ligado = false }
+    override fun onStop() { super.onStop(); Thumbs.ligado = false; Controle.desligarServidor() }
 }

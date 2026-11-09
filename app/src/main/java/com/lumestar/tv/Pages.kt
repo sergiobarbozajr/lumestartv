@@ -116,6 +116,8 @@ fun HomePage(st: AppState, locked: Boolean) {
                 }
             }
         }
+        val novas = Novidades.itens(Catalog.items)
+        if (novas.isNotEmpty()) item(key = "novidades") { Box(Modifier.padding(start = 28.dp)) { ItemRow(st, "Novidades da semana", novas, locked) } }
         item {
             Column(Modifier.padding(start = 28.dp)) {
                 if (cont.isNotEmpty()) ItemRow(st, "Continuar assistindo", cont.map { it.first }, locked,

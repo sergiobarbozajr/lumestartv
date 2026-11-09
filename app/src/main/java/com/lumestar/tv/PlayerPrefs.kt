@@ -55,6 +55,7 @@ object PP {
     var radioCidade by StrP("radioCidade", "")        // "Macaé, Rio de Janeiro"
     var radioEstado by StrP("radioEstado", "")
     var radioPos by StrP("radioPos", "")              // "lat,lon"
+    var controleCelular by BoolP("controleCelular", true)  // celular como controle remoto (com código de pareamento)
     var videoMode by StrP("videoDireto", "auto")   // auto | direto | classico
     var diretoFalhou by BoolP("diretoFalhou", false)
     var testeRes by StrP("testeDesempenho", "")
