@@ -507,7 +507,11 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 }
                 // formato que a TV não decodifica: oferece converter (em vez de ficar tentando de novo)
                 val formato = e.errorCode in 4000..4999 || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
-                if (formato && !url.startsWith("file:") && Conversor.disponivel()) { convOferta = "video"; err = null; wait = 0; return }
+                if (formato && !url.startsWith("file:") && Conversor.disponivel()) {
+                    // só o som não toca (ex.: AC3/DTS): converte só o áudio, bem mais rápido
+                    val soSom = (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let { it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && it.rendererType == MC.TRACK_TYPE_AUDIO } == true
+                    convOferta = if (soSom) "audio" else "video"; err = null; wait = 0; return
+                }
                 PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' '); PlayerDiag.lastTitle = req.title; PlayerDiag.lastAt = System.currentTimeMillis()
                 err = "Não foi possível reproduzir (${e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')})."
                 wait = 30

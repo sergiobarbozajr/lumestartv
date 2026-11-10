@@ -28,7 +28,13 @@ object Conversor {
     /** Só em Android 7+ (o que a biblioteca exige), fora do modo leve e se a biblioteca carregou. */
     fun disponivel(): Boolean = Build.VERSION.SDK_INT >= 24 && !Perf.lite && carregou
     private val carregou: Boolean by lazy {
-        try { FFmpegKitConfig.getFFmpegVersion(); true } catch (e: Throwable) { android.util.Log.w("LumeStar", "conversor: FFmpeg não carregou", e); false }
+        try {
+            FFmpegKitConfig.getFFmpegVersion()
+            // o FFmpegKit instala tratadores de sinal; sem isto, um SIGPIPE (o FFmpeg fecha a conexão do proxy
+            // no meio de uma resposta) derruba o app inteiro
+            com.arthenica.ffmpegkit.Signal.values().filter { it.name in setOf("SIGPIPE", "SIGXCPU", "SIGINT", "SIGQUIT", "SIGTERM") }.forEach { FFmpegKitConfig.ignoreSignal(it) }
+            true
+        } catch (e: Throwable) { android.util.Log.w("LumeStar", "conversor: FFmpeg não carregou", e); false }
     }
 
     private var sessao: FFmpegSession? = null
@@ -44,7 +50,8 @@ object Conversor {
         val dir = File(ctx.cacheDir, "conversao").apply { deleteRecursively(); mkdirs() }
         val saida = File(dir, "saida.m3u8")
         val entrada = ProxyLocal.endereco(url)
-        val codificadores = if (soAudio) listOf("copy") else listOf("h264_mediacodec", "mpeg4")
+        // MPEG-4 em software: roda igual em toda TV (o H.264 pelo chip da TV variava muito de aparelho para aparelho)
+        val codificadores = if (soAudio) listOf("copy") else listOf("mpeg4")
         Thread {
             var avisou = false
             for ((n, cod) in codificadores.withIndex()) {
@@ -53,7 +60,7 @@ object Conversor {
                 val args = argumentos(entrada, cod, live, dir, saida)
                 android.util.Log.i("LumeStar", "conversor: começando com $cod")
                 var segundos = 0
-                val s = FFmpegKit.executeWithArgumentsAsync(args.toTypedArray(), { }, { }, { st -> segundos = (st.time / 1000).toInt(); progresso(segundos) })
+                val s = FFmpegKit.executeWithArgumentsAsync(args.toTypedArray(), { }, { lg -> if (lg.level.value <= com.arthenica.ffmpegkit.Level.AV_LOG_WARNING.value) android.util.Log.w("LumeStar", "ffmpeg: " + lg.message.trim().take(200)) }, { st -> segundos = (st.time / 1000).toInt(); progresso(segundos) })
                 sessao = s
                 // espera ficar pronto (ou acabar/falhar)
                 val minimo = if (live) 2 else 6
@@ -81,7 +88,6 @@ object Conversor {
             "-map", "0:v:0?", "-map", "0:a:0?", "-sn", "-dn")
         when (cod) {
             "copy" -> a += listOf("-c:v", "copy")
-            "h264_mediacodec" -> a += listOf("-vf", "scale='min(1280,iw)':-2,format=nv12", "-c:v", "h264_mediacodec", "-b:v", "3500k", "-g", "60")
             else -> a += listOf("-vf", "scale='min(1280,iw)':-2", "-c:v", "mpeg4", "-q:v", "4", "-g", "60", "-threads", "4")
         }
         a += listOf("-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", "48000",

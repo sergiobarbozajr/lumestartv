@@ -202,9 +202,9 @@ for v in mpeg2 ac3; do
   shot "conversor_${v}_oferta"
   key KEYCODE_DPAD_CENTER 1
   sleep 20; shot "conversor_${v}_convertendo"
-  for i in $(seq 1 30); do adb logcat -d | grep -q "conversor: tocando o vídeo convertido" && break; sleep 3; done
+  for i in $(seq 1 60); do adb logcat -d | grep -q "conversor: tocando o vídeo convertido" && break; sleep 3; done
   sleep 4; shot "conversor_${v}_tocando"
-  adb logcat -d | grep -E "LumeStar|ffmpeg-kit|FFmpegKit" | grep -iE "conversor|proxy|ffmpeg" | tail -12 > teste/conversor_$v.txt
+  adb logcat -d | grep -E "LumeStar|ffmpeg-kit|FFmpegKit|Fatal signal|DEBUG   :|AndroidRuntime: FATAL|AndroidRuntime: (java|Caused|\tat)" | grep -iE "conversor|proxy|ffmpeg|fatal|signal|DEBUG|exception|caused|\tat " | tail -40 > teste/conversor_$v.txt
   if grep -q "tocando o vídeo convertido" teste/conversor_$v.txt; then echo "ok   conversor $v: converteu e tocou ($(grep -o 'começando com [a-z0-9_]*' teste/conversor_$v.txt | tail -1))" >> teste/resumo_extra.txt
   else echo "FALHOU conversor $v" >> teste/resumo_extra.txt; echo "conversor: $v não tocou depois de converter" >> teste/falhou.txt; cat teste/conversor_$v.txt >> teste/falhou.txt; fi
 done
