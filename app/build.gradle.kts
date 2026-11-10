@@ -18,8 +18,10 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 49
-        versionName = "0.9.5"
+        versionCode = 50
+        versionName = "0.9.7"
+        // conversor nativo: FFmpeg só para ARM 32 e 64 bits (TVs e celulares)
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         // chave padrão do TMDB: vem do segredo TMDB_KEY do GitHub na hora de compilar (nunca fica no código)
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() } + "\"")
         buildConfigField("String", "TMDB_KEY2", "\"" + (System.getenv("TMDB_KEY_2") ?: "").filter { it.isLetterOrDigit() } + "\"")
@@ -89,6 +91,9 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")
 
+    // conversor nativo: FFmpegKit 6.0 compilado por nós (LGPL, MediaCodec), baixado da release ffmpeg-kit-lume-6.0-1 pelo CI
+    implementation(files("libs/ffmpeg-kit-lume.aar"))
+    implementation("com.arthenica:smart-exception-java:0.2.1")
     // QR Code do "Controle pelo celular" (só a parte que gera o código, sem câmera)
     implementation("com.google.zxing:core:3.5.3")
     // capas e logos

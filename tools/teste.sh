@@ -193,6 +193,23 @@ sleep 8; shot "cabecalho_capa"
   if grep -q "^200 /capa.png" teste/cabecalhos.log; then echo "ok   capa do JSON (campo capa) carregou"; else echo "FALHOU capa"; echo "cabeçalho por canal: a capa do JSON não carregou" >> teste/falhou.txt; fi
 } >> teste/resumo_extra.txt
 
+# ---- conversor nativo: vídeo MPEG-2 e áudio AC3 (o emulador não toca nenhum dos dois direto) ----
+ffmpeg -loglevel error -f lavfi -i testsrc=size=1280x720:rate=25 -f lavfi -i sine=frequency=330 -t 40 -c:v mpeg2video -q:v 4 -c:a mp2 cab/hls/mpeg2.mp4 || echo "sem mpeg2"
+ffmpeg -loglevel error -f lavfi -i testsrc=size=640x360:rate=25 -f lavfi -i sine=frequency=550 -t 40 -c:v libx264 -preset veryfast -c:a ac3 cab/hls/ac3.mp4 || echo "sem ac3"
+for v in mpeg2 ac3; do
+  adb logcat -c
+  abre --es abrir "http://127.0.0.1:8098/livre/$v.mp4"; sleep 10
+  shot "conversor_${v}_oferta"
+  key KEYCODE_DPAD_CENTER 1
+  sleep 20; shot "conversor_${v}_convertendo"
+  for i in $(seq 1 30); do adb logcat -d | grep -q "conversor: tocando o vídeo convertido" && break; sleep 3; done
+  sleep 4; shot "conversor_${v}_tocando"
+  adb logcat -d | grep -E "LumeStar|ffmpeg-kit|FFmpegKit" | grep -iE "conversor|proxy|ffmpeg" | tail -12 > teste/conversor_$v.txt
+  if grep -q "tocando o vídeo convertido" teste/conversor_$v.txt; then echo "ok   conversor $v: converteu e tocou ($(grep -o 'começando com [a-z0-9_]*' teste/conversor_$v.txt | tail -1))" >> teste/resumo_extra.txt
+  else echo "FALHOU conversor $v" >> teste/resumo_extra.txt; echo "conversor: $v não tocou depois de converter" >> teste/falhou.txt; cat teste/conversor_$v.txt >> teste/falhou.txt; fi
+done
+adb shell pidof $PKG > /dev/null || echo "conversor: o app fechou" >> teste/falhou.txt
+
 # lista gigante (como a de um usuário real): 40 mil filmes/séries e 5 mil canais
 python3 - <<'PY'
 import random

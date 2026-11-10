@@ -30,6 +30,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Baixar o FFmpeg do conversor (compilado por nós, 32 e 64 bits)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mkdir -p app/libs && gh release download ffmpeg-kit-lume-6.0-1 -p ffmpeg-kit-lume.aar -D app/libs --clobber --repo ${{ github.repository }}
+
       - name: Preparar o Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -83,6 +88,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Baixar o FFmpeg do conversor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mkdir -p app/libs && gh release download ffmpeg-kit-lume-6.0-1 -p ffmpeg-kit-lume.aar -D app/libs --clobber --repo ${{ github.repository }} || true
       - name: Verificar compatibilidade com Android 5 (lint NewApi)
         run: gradle :app:lintDebug --no-daemon || true
       - name: Enviar relatorio para o ramo "lint"
@@ -112,7 +121,7 @@ jobs:
         with:
           api-level: 30
           arch: x86_64
-          target: default
+          target: google_apis
           disable-animations: false
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -no-snapshot -camera-back none -memory 3072

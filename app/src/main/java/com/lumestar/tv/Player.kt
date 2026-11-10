@@ -57,6 +57,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -291,6 +292,20 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     var attempt by remember { mutableIntStateOf(0) }
     var startAt by remember { mutableLongStateOf(req.start) }
     var vol by remember { mutableFloatStateOf(1f) }
+    // conversor nativo: "oferta" = o formato não toca direto; "convertendo" = FFmpeg trabalhando
+    var convOferta by remember { mutableStateOf<String?>(null) } // "video" ou "audio"
+    var convendo by remember { mutableStateOf(false) }
+    var convSeg by remember { mutableIntStateOf(0) }
+    val urlOriginal = remember { req.url }
+    fun converter() {
+        val modo = convOferta ?: return
+        convOferta = null; convendo = true; convSeg = 0; err = null; wait = 0
+        Conversor.iniciar(ctx, urlOriginal, req.live, modo == "audio",
+            progresso = { sgs -> convSeg = sgs },
+            pronto = { local -> scope.launch { convendo = false; startAt = 0L; url = local; attempt++ } },
+            erro = { m -> scope.launch { convendo = false; err = m; wait = 0 } })
+    }
+    DisposableEffect(Unit) { onDispose { Conversor.parar() } }
     var tracks by remember { mutableStateOf(Tracks.EMPTY) }
     var vsize by remember { mutableStateOf(VideoSize.UNKNOWN) }
     var osd by remember { mutableStateOf("") }
@@ -449,11 +464,16 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             override fun onPlaybackStateChanged(s: Int) {
                 buffering = s == Player.STATE_BUFFERING
                 if (s == Player.STATE_BUFFERING && dur >= 0 && pos > 0) PlayerDiag.rebuffers++
-                if (s == Player.STATE_READY) { err = null; rapidas = 0; dur = player.duration.coerceAtLeast(0); matchRate() }
+                if (s == Player.STATE_READY) { err = null; rapidas = 0; if (url.startsWith("file:")) android.util.Log.i("LumeStar", "conversor: tocando o vídeo convertido"); dur = player.duration.coerceAtLeast(0); matchRate() }
                 if (s == Player.STATE_ENDED && !req.live) { save(); st.closePlayer() }
             }
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
             override fun onTracksChanged(t: Tracks) {
+                if (!url.startsWith("file:") && !convendo && Conversor.disponivel()) {
+                    fun semSuporte(tipo: Int) = t.groups.any { it.type == tipo } && t.groups.none { it.type == tipo && it.isSupported }
+                    if (semSuporte(MC.TRACK_TYPE_VIDEO)) convOferta = "video"
+                    else if (semSuporte(MC.TRACK_TYPE_AUDIO)) convOferta = "audio"
+                }
                 val hadExt = audioUrl != null && tracksOf(tracks, MC.TRACK_TYPE_AUDIO).size < tracksOf(t, MC.TRACK_TYPE_AUDIO).size
                 tracks = t
                 if (hadExt) tracksOf(t, MC.TRACK_TYPE_AUDIO).lastOrNull()?.let { o ->
@@ -485,6 +505,9 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                     scope.launch { delay(2000L * rapidas); startAt = pos; attempt++ }
                     return
                 }
+                // formato que a TV não decodifica: oferece converter (em vez de ficar tentando de novo)
+                val formato = e.errorCode in 4000..4999 || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
+                if (formato && !url.startsWith("file:") && Conversor.disponivel()) { convOferta = "video"; err = null; wait = 0; return }
                 PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' '); PlayerDiag.lastTitle = req.title; PlayerDiag.lastAt = System.currentTimeMillis()
                 err = "Não foi possível reproduzir (${e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')})."
                 wait = 30
@@ -591,6 +614,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 touch++
                 val kc = ev.key.nativeKeyCode
+                if (convOferta != null && (kc == AKey.KEYCODE_DPAD_CENTER || kc == AKey.KEYCODE_ENTER || kc == AKey.KEYCODE_NUMPAD_ENTER)) { converter(); return@onKeyEvent true }
                 if (kc == AKey.KEYCODE_CHANNEL_UP || kc == AKey.KEYCODE_PAGE_UP) { zap(1); return@onKeyEvent true }
                 if (kc == AKey.KEYCODE_CHANNEL_DOWN || kc == AKey.KEYCODE_PAGE_DOWN) { zap(-1); return@onKeyEvent true }
                 if (showUi) return@onKeyEvent false
@@ -627,7 +651,22 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             T("TESTE DE DESEMPENHO", 10, C.a1, FontWeight.Bold)
             T(testeMsg, 14, C.fg, FontWeight.SemiBold, lineHeight = 20)
         }
-        if (buffering && err == null) Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp)).background(Color(0xCC050816)).padding(horizontal = 18.dp, vertical = 10.dp)) { T("Carregando…", 14, C.fg, FontWeight.Bold) }
+        if (buffering && err == null && convOferta == null && !convendo) Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp)).background(Color(0xCC050816)).padding(horizontal = 18.dp, vertical = 10.dp)) { T("Carregando…", 14, C.fg, FontWeight.Bold) }
+        convOferta?.let { modo ->
+            Column(Modifier.align(Alignment.Center).width(520.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE0E1538)).border(1.dp, C.a1, RoundedCornerShape(16.dp))
+                .then(if (touchMode) Modifier.clickable { converter() } else Modifier).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                T(if (modo == "audio") "O som deste vídeo está num formato que a TV não toca." else "Este vídeo está num formato que a TV não toca direto.", 15, C.fg, FontWeight.Bold)
+                T("O LumeStarTV pode converter aqui mesmo, em até 720p. Demora um pouco para começar.", 13, C.muted, lineHeight = 18)
+                Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Brush.horizontalGradient(listOf(C.a1, C.a2))).padding(horizontal = 16.dp, vertical = 9.dp)) {
+                    T("OK  ›  Converter para tocar (pode demorar)", 14, Color(0xFF050816), FontWeight.ExtraBold)
+                }
+                T("Voltar: sair", 11, C.dim)
+            }
+        }
+        if (convendo) Column(Modifier.align(Alignment.Center).width(460.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE0E1538)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            T("Convertendo para a TV tocar…", 15, C.fg, FontWeight.Bold)
+            T(if (convSeg > 0) "$convSeg s prontos · começa a tocar com uns 24 s" else "Abrindo o vídeo…", 13, C.muted)
+        }
         err?.let { m ->
             Column(Modifier.align(Alignment.Center).width(460.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE0E1538)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 T(m, 15, C.fg, FontWeight.Bold)
