@@ -509,7 +509,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 val formato = e.errorCode in 4000..4999 || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
                 if (formato && !url.startsWith("file:") && Conversor.disponivel()) {
                     // só o som não toca (ex.: AC3/DTS): converte só o áudio, bem mais rápido
-                    val soSom = (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let { it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && it.rendererType == MC.TRACK_TYPE_AUDIO } == true
+                    val soSom = (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let { it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && androidx.media3.common.MimeTypes.isAudio(it.rendererFormat?.sampleMimeType) } == true
                     convOferta = if (soSom) "audio" else "video"; err = null; wait = 0; return
                 }
                 PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' '); PlayerDiag.lastTitle = req.title; PlayerDiag.lastAt = System.currentTimeMillis()
