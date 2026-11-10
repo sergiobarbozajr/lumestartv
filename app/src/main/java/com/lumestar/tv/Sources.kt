@@ -199,7 +199,7 @@ object Lists {
         val seriesMeta = HashMap<String, Pair<String, String>>()
         raw.forEachIndexed { i, (name, group, ul) ->
             val (u, logo) = ul
-            val low = u.lowercase()
+            val low = Cabecalhos.base(u).lowercase()
             val m = epRx.find(name)
             if (m != null && (low.contains("/series/") || !low.contains("/live/"))) {
                 val sname = m.groupValues[1].trim().ifBlank { name }
@@ -230,15 +230,28 @@ object Lists {
     fun m3u(body: String): List<Triple<String, String, Pair<String, String>>> {
         val out = ArrayList<Triple<String, String, Pair<String, String>>>()
         var name: String? = null; var group = ""; var logo = ""
+        val cab = LinkedHashMap<String, String>()
         for (line0 in body.lineSequence()) {
             val l = line0.trim()
             if (l.startsWith("#EXTINF", true)) {
                 name = l.substringAfterLast(",").trim().ifBlank { attr(l, "tvg-name") }
                 group = attr(l, "group-title"); logo = attr(l, "tvg-logo")
+                // alguns geradores põem o user-agent/referrer como atributo do próprio #EXTINF
+                attr(l, "user-agent").takeIf { it.isNotBlank() }?.let { cab["User-Agent"] = it }
+                (attr(l, "referrer").ifBlank { attr(l, "referer") }).takeIf { it.isNotBlank() }?.let { cab["Referer"] = it }
             } else if (l.startsWith("#EXTGRP:", true)) {
                 group = l.substringAfter(":").trim()
+            } else if (l.startsWith("#EXTVLCOPT:", true)) {
+                // #EXTVLCOPT:http-user-agent=...  /  http-referrer=... (ou http-referer)
+                val kv = l.substringAfter(":")
+                val k = kv.substringBefore('=').trim(); val v = kv.substringAfter('=', "").trim()
+                if (v.isNotEmpty()) when (Cabecalhos.nomePadrao(k)) {
+                    "User-Agent" -> cab["User-Agent"] = v
+                    "Referer" -> cab["Referer"] = v
+                    "Origin" -> cab["Origin"] = v
+                }
             } else if (l.isNotEmpty() && !l.startsWith("#") && name != null) {
-                out.add(Triple(name, group, l to logo)); name = null
+                out.add(Triple(name, group, Cabecalhos.junta(l, cab) to logo)); name = null; cab.clear()
             }
         }
         return out
@@ -251,13 +264,21 @@ object Lists {
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val n = o.optString("name").ifBlank { o.optString("title").ifBlank { o.optString("nome") } }
-            val u = o.optString("url").ifBlank { o.optString("stream_url").ifBlank { o.optString("link") } }
-            if (n.isBlank() || u.isBlank()) continue
+            val u0 = o.optString("url").ifBlank { o.optString("stream_url").ifBlank { o.optString("link") } }
+            if (n.isBlank() || u0.isBlank()) continue
+            val cab = LinkedHashMap<String, String>()
+            o.optJSONObject("headers")?.let { h -> h.keys().forEach { k -> h.optString(k).takeIf { it.isNotBlank() }?.let { cab[Cabecalhos.nomePadrao(k)] = it } } }
+            primeiro(o, "user_agent", "userAgent", "user-agent", "http-user-agent")?.let { cab["User-Agent"] = it }
+            primeiro(o, "referer", "referrer", "http-referrer", "http-referer")?.let { cab["Referer"] = it }
+            val capa = primeiro(o, "logo", "tvg_logo", "tvg-logo", "icon", "capa", "poster", "cover", "image", "imagem", "thumbnail") ?: ""
             out.add(Triple(n, o.optString("group").ifBlank { o.optString("category").ifBlank { o.optString("group_title").ifBlank { o.optString("categoria") } } },
-                u to o.optString("logo").ifBlank { o.optString("tvg_logo").ifBlank { o.optString("icon") } }))
+                Cabecalhos.junta(u0, cab) to capa))
         }
         return out
     }
+
+    private fun primeiro(o: org.json.JSONObject, vararg k: String): String? =
+        k.firstNotNullOfOrNull { c -> o.optString(c).trim().takeIf { it.isNotEmpty() && it != "null" } }
 
     private fun txt(body: String): List<Triple<String, String, Pair<String, String>>> =
         body.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.mapNotNull { l ->

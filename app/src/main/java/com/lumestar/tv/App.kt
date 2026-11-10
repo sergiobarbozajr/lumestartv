@@ -265,10 +265,21 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
             st.openT = -1f
         }
         withFrameNanos { }; withFrameNanos { }
-        args.page?.let { p -> if (MENU.any { it.id == p } || p == "modelos") st.page = p else if (p.startsWith("cfg:")) { st.cfgSel = p.removePrefix("cfg:"); st.page = "config" } }
+        args.page?.let { p -> if (MENU.any { it.id == p } || p == "modelos") st.page = p else if (p.startsWith("pesquisa:")) { st.query = p.removePrefix("pesquisa:"); st.page = "pesquisa" } else if (p.startsWith("cfg:")) { st.cfgSel = p.removePrefix("cfg:"); st.page = "config" } }
         try { st.navReq[st.page]?.requestFocus() } catch (e: Exception) {}
         args.url?.let { u ->
             if (u == "desempenho") st.play(testeDesempenho())
+            else if (u.startsWith("canal:")) {
+                // teste: toca um canal das listas pelo nome, do jeito que o usuário tocaria (com os cabeçalhos dele)
+                val nome = u.removePrefix("canal:")
+                launch {
+                    repeat(60) {
+                        Catalog.items.firstOrNull { it.title == nome }?.let { i -> st.play(PlayReq(i.id, i.title, i.url, i.kind == LIVE, 0L, i.group, i.ext)); return@launch }
+                        kotlinx.coroutines.delay(1000)
+                    }
+                    android.util.Log.w("LumeStar", "teste: canal não encontrado: $nome")
+                }
+            }
             else st.play(PlayReq("teste:" + u.hashCode(), "Teste de reprodução", u, !u.contains(".mp4"), 0L, "Teste"))
         }
         NewsState.load()

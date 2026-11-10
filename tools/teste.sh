@@ -141,6 +141,58 @@ adb logcat -d | grep -iE "FATAL|VideoFrameProcessingException|PixelCopy" | tail 
 abre --es pagina inicio
 adb logcat -d | grep -iE "ExoPlayer|MediaCodec.*(error|fail)|PlaybackException" | tail -20 > teste/player_log.txt
 
+# ---- cabeçalhos por canal (listas do LumeStar Studio): User-Agent/Referer em M3U, JSON e formato Kodi ----
+mkdir -p cab/hls cab/listas
+which ffmpeg > /dev/null || sudo apt-get install -y -qq ffmpeg > /dev/null
+ffmpeg -loglevel error -f lavfi -i testsrc=size=640x360:rate=25 -f lavfi -i sine=frequency=440 -t 12 -c:v libx264 -preset veryfast -g 50 -c:a aac -f hls -hls_time 2 -hls_list_size 0 cab/hls/index.m3u8
+ffmpeg -loglevel error -f lavfi -i color=c=orange:s=300x450 -frames:v 1 cab/capa.png
+S=http://127.0.0.1:8098
+cat > cab/listas/studio.m3u <<M3U
+#EXTM3U
+#EXTINF:-1 tvg-logo="" group-title="Studio",Canal Referer M3U
+#EXTVLCOPT:http-referrer=https://lumestar.test/
+$S/ref/m3u/index.m3u8
+#EXTINF:-1 tvg-logo="" group-title="Studio",Canal UA M3U
+#EXTVLCOPT:http-user-agent=LumeStudio/1.0
+$S/ua/m3u/index.m3u8
+#EXTINF:-1 tvg-logo="" group-title="Studio",Canal Sem Cabecalho
+$S/ref/semcab/index.m3u8
+M3U
+cat > cab/listas/studio.json <<JSON
+[{"nome": "Canal JSON", "url": "$S/both/json/index.m3u8", "grupo": "Studio", "group": "Studio", "referer": "https://lumestar.test/", "user_agent": "LumeStudio/1.0", "capa": "$S/capa.png"}]
+JSON
+cat > cab/listas/kodi.m3u <<M3U
+#EXTM3U
+#EXTINF:-1 group-title="Studio",Canal Kodi
+$S/both/kodi/index.m3u8|User-Agent=LumeStudio%2F1.0&Referer=https%3A%2F%2Flumestar.test%2F
+M3U
+: > teste/cabecalhos.log
+(python3 tools/servidor_cabecalhos.py "$PWD/cab" "$PWD/teste/cabecalhos.log" > /dev/null 2>&1 &) ; sleep 1
+adb reverse tcp:8098 tcp:8098
+abre --es pagina config
+key KEYCODE_DPAD_RIGHT 1
+for i in $(seq 1 14); do key KEYCODE_DPAD_UP 0.3; done
+sleep 2
+adb forward tcp:8765 tcp:8765
+for l in studio.m3u studio.json kodi.m3u; do
+  curl -s -m 15 -d "tipo=lista&nome=Studio+$l&url=http%3A%2F%2F127.0.0.1%3A8098%2Flistas%2F$l" http://127.0.0.1:8765/ > /dev/null; sleep 4
+done
+sleep 10
+for c in "Canal Referer M3U" "Canal UA M3U" "Canal JSON" "Canal Kodi" "Canal Sem Cabecalho"; do
+  abre --es abrir "'canal:$c'"; sleep 12
+  shot "cabecalho_$(echo $c | tr ' ' '_')"
+done
+abre --es pagina "'pesquisa:Canal JSON'"
+sleep 8; shot "cabecalho_capa"
+{
+  echo "== cabeçalhos por canal =="
+  for r in "/ref/m3u/" "/ua/m3u/" "/both/json/" "/both/kodi/"; do
+    if grep -q "^200 ${r}.*\.ts " teste/cabecalhos.log; then echo "ok   $r tocou com o cabeçalho certo"; else echo "FALHOU $r não tocou"; echo "cabeçalho por canal: $r não tocou" >> teste/falhou.txt; fi
+  done
+  if grep -q "^403 /ref/semcab/" teste/cabecalhos.log && ! grep -q "^200 /ref/semcab/" teste/cabecalhos.log; then echo "ok   servidor recusou o canal sem cabeçalho (o teste é válido)"; else echo "FALHOU controle sem cabeçalho"; echo "cabeçalho por canal: o controle sem cabeçalho não foi recusado" >> teste/falhou.txt; fi
+  if grep -q "^200 /capa.png" teste/cabecalhos.log; then echo "ok   capa do JSON (campo capa) carregou"; else echo "FALHOU capa"; echo "cabeçalho por canal: a capa do JSON não carregou" >> teste/falhou.txt; fi
+} >> teste/resumo_extra.txt
+
 # lista gigante (como a de um usuário real): 40 mil filmes/séries e 5 mil canais
 python3 - <<'PY'
 import random

@@ -92,8 +92,10 @@ fun ThumbHost(ocupado: () -> Boolean) {
     if (Perf.lite) return
     val ctx = LocalContext.current
     val tv = remember { arrayOfNulls<TextureView>(1) }
+    // fonte HTTP própria para poder usar o User-Agent/Referer de cada canal
+    val http = remember { androidx.media3.datasource.DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true) }
     val player = remember {
-        ExoPlayer.Builder(ctx).build().apply {
+        ExoPlayer.Builder(ctx).setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(ctx, http))).build().apply {
             volume = 0f
             setAudioAttributes(AudioAttributes.DEFAULT, false) // não pega o foco de áudio (a rádio continua)
             trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).setForceLowestBitrate(true).build()
@@ -115,7 +117,9 @@ fun ThumbHost(ocupado: () -> Boolean) {
             }
             player.addListener(l)
             try {
-                player.setMediaItem(MediaItem.fromUri(it.url)); player.prepare(); player.play()
+                val e = Cabecalhos.separa(it.url)
+                http.setUserAgent(e.userAgent); http.setDefaultRequestProperties(e.outros)
+                player.setMediaItem(MediaItem.fromUri(e.url)); player.prepare(); player.play()
                 val ok = withTimeoutOrNull(9000) { quadro.await() } != null && player.playerError == null
                 if (ok) {
                     delay(900)

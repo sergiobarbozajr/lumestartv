@@ -242,9 +242,19 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
     }
 
     private var ultimo = ""
+    private var comCabecalho = false
     fun load(url: String, subUrl: String?, audioUrl: String?, startMs: Long) {
         if (url != ultimo) { forcarHls = false; ultimo = url }
-        val main = msf.createMediaSource(item(url, subUrl))
+        // cabeçalhos próprios do canal (url|User-Agent=...&Referer=...): valem só para este vídeo
+        val e = Cabecalhos.separa(url)
+        if (e.cab.isNotEmpty()) {
+            e.userAgent?.let { ok.setUserAgent(it) }
+            ok.setDefaultRequestProperties(e.outros)
+            comCabecalho = true
+        } else if (comCabecalho) {
+            ok.setDefaultRequestProperties(emptyMap()); ok.setUserAgent(UA_APP); comCabecalho = false
+        }
+        val main = msf.createMediaSource(item(e.url, subUrl))
         val src = if (!audioUrl.isNullOrBlank()) MergingMediaSource(main, ProgressiveMediaSource.Factory(ds).createMediaSource(MediaItem.fromUri(audioUrl))) else main
         player.setMediaSource(src, startMs.coerceAtLeast(0))
         player.prepare()
@@ -468,7 +478,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 // ao vivo ficou para trás da janela da transmissão: volta para o ponto ao vivo sem mostrar erro
                 if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) { player.seekToDefaultPosition(); player.prepare(); return }
                 // endereço sem extensão que na verdade é HLS: tenta de novo como HLS
-                if (!eng.forcarHls && e.errorCode in 3000..3999 && !url.lowercase().contains(".m3u8") && !url.lowercase().contains(".mpd")) { eng.forcarHls = true; startAt = player.currentPosition; attempt++; return }
+                if (!eng.forcarHls && e.errorCode in 3000..3999 && !Cabecalhos.base(url).lowercase().contains(".m3u8") && !Cabecalhos.base(url).lowercase().contains(".mpd")) { eng.forcarHls = true; startAt = player.currentPosition; attempt++; return }
                 // queda rápida de rede: até 3 novas tentativas silenciosas (2 s, 4 s, 6 s) antes de mostrar o aviso
                 if (e.errorCode in 2000..2999 && rapidas < 3) {
                     rapidas++; val pos = player.currentPosition

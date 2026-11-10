@@ -154,9 +154,11 @@ object OfflineScan {
     }
 
     private fun alive(url: String): Boolean = try {
-        val c = (URL(url).openConnection(PP.proxy()) as HttpURLConnection).apply {
+        val e = Cabecalhos.separa(url)
+        val c = (URL(e.url).openConnection(PP.proxy()) as HttpURLConnection).apply {
             connectTimeout = 6000; readTimeout = 6000; instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "VLC/3.0.20 LibVLC/3.0.20"); setRequestProperty("Range", "bytes=0-2047")
+            setRequestProperty("User-Agent", e.userAgent ?: "VLC/3.0.20 LibVLC/3.0.20"); setRequestProperty("Range", "bytes=0-2047")
+            e.outros.forEach { (k, v) -> setRequestProperty(k, v) }
         }
         val code = c.responseCode
         val ok = code in 200..399 && c.inputStream.use { it.read(ByteArray(512)) > 0 }
