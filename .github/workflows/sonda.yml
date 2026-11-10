@@ -1,14 +1,33 @@
-name: sonda-ffmpeg
+name: ffmpeg-kit-lume
 on:
   push:
     branches: [ sonda ]
+permissions:
+  contents: write
 jobs:
-  sonda:
+  ffmpeg:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
-      - run: |
-          git clone -q --depth 1 --branch v6.0 https://github.com/arthenica/ffmpeg-kit.git fk || git clone -q --depth 1 https://github.com/arthenica/ffmpeg-kit.git fk
-          cd fk && git log -1 --format=%cd && ls
-          ./android.sh --help | head -120
-          grep -n "arm-v7a\|api-level\|API=" android.sh | head -40
-          ls $ANDROID_SDK_ROOT/ndk 2>/dev/null; echo NDK_HOME=$ANDROID_NDK_HOME
+      - name: Ferramentas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq autoconf automake libtool pkg-config curl cmake gcc gperf texinfo yasm nasm bison autogen git wget autopoint meson ninja-build > /dev/null
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "ndk;25.2.9519653" > /dev/null
+      - name: Compilar FFmpegKit (armeabi-v7a + arm64-v8a, LGPL, MediaCodec)
+        run: |
+          git clone -q --depth 1 --branch v6.0 https://github.com/arthenica/ffmpeg-kit.git fk
+          cd fk
+          export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653
+          ./android.sh --api-level=21 --enable-android-media-codec --enable-android-zlib --disable-arm-v7a --disable-x86 --disable-x86-64 || { tail -80 build.log; exit 1; }
+          ls -la prebuilt/bundle-android-aar/ffmpeg-kit/ || find prebuilt -name "*.aar"
+      - name: Conferir e publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          A=$(find fk/prebuilt -name "ffmpeg-kit.aar" | head -1); echo $A; ls -la $A
+          mkdir x && cd x && unzip -q ../$A && ls jni/ && du -sh jni/*/ && grep -o 'minSdkVersion="[0-9]*"' AndroidManifest.xml
+          strings jni/arm64-v8a/libavcodec.so | grep -m3 -oE "h264_mediacodec|hevc_mediacodec|mpeg4" | sort -u
+          cd ..
+          cp $A ffmpeg-kit-lume.aar
+          gh release create ffmpeg-kit-lume-6.0-1 ffmpeg-kit-lume.aar --repo ${{ github.repository }} --title "FFmpegKit LumeStar (6.0, LGPL, armeabi-v7a + arm64-v8a, MediaCodec)" --notes "Compilado de arthenica/ffmpeg-kit v6.0 com --enable-android-media-codec --enable-android-zlib, sem GPL. Usado pelo conversor do LumeStarTV." --prerelease || gh release upload ffmpeg-kit-lume-6.0-1 ffmpeg-kit-lume.aar --clobber --repo ${{ github.repository }}
