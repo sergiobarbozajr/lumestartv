@@ -1,0 +1,14 @@
+name: sonda-ffmpeg
+on:
+  push:
+    branches: [ sonda ]
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          git clone -q --depth 1 --branch v6.0 https://github.com/arthenica/ffmpeg-kit.git fk || git clone -q --depth 1 https://github.com/arthenica/ffmpeg-kit.git fk
+          cd fk && git log -1 --format=%cd && ls
+          ./android.sh --help | head -120
+          grep -n "arm-v7a\|api-level\|API=" android.sh | head -40
+          ls $ANDROID_SDK_ROOT/ndk 2>/dev/null; echo NDK_HOME=$ANDROID_NDK_HOME
