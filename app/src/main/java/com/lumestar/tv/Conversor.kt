@@ -128,7 +128,7 @@ object ProxyLocal {
         return "http://127.0.0.1:${ligar()}/p/${b64(url)}/$nome"
     }
 
-    private fun atender(c: Socket) = c.use { s ->
+    private fun atender(c: Socket) { c.use { s ->
         try {
             val ins = s.getInputStream().bufferedReader(Charsets.ISO_8859_1)
             val linha = ins.readLine() ?: return
@@ -166,5 +166,5 @@ object ProxyLocal {
                 out.flush()
             }
         } catch (e: Throwable) { android.util.Log.w("LumeStar", "proxy local: ${e.message}") }
-    }
+    } }
 }
