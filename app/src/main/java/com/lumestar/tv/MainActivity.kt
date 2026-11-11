@@ -36,7 +36,12 @@ class MainActivity : ComponentActivity() {
             GpuProbe.result = GpuProbe.Result("modo leve", "", 99f, 99f, 99f)
         } else {
             GpuProbe.load(PP.sp, BuildConfig.VERSION_NAME)
-            if (GpuProbe.result == null) android.os.Handler(mainLooper).postDelayed({ GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) }, 20_000)
+            if (GpuProbe.result == null) {
+                // com vídeo aberto, espera: o teste ocupa a placa por alguns segundos e travava o vídeo em TVs fracas
+                val h = android.os.Handler(mainLooper)
+                val sonda = object : Runnable { override fun run() { if (VideoOut.tocando) h.postDelayed(this, 60_000) else GpuProbe.run(PP.sp, BuildConfig.VERSION_NAME) } }
+                h.postDelayed(sonda, 20_000)
+            }
         }
         KeyMap.init(prefs)
         CustomTheme.init(this)

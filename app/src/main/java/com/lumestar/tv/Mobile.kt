@@ -156,7 +156,7 @@ private fun MobileShell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
     }
 
     val p = st.player
-    if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { key(p.id, p.url) { PlayerScreen(st, p, touchMode = true) } } }; MToast(st); return }
+    if (p != null) { DesignScale { Box(Modifier.fillMaxSize().background(Color.Black)) { key(p.id, p.url, st.playerGen) { PlayerScreen(st, p, touchMode = true) } } }; MToast(st); return }
 
     ThumbHost { st.player != null }
     Box(Modifier.size(100.dp, 58.dp).background(C.bg))

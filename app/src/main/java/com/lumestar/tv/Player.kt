@@ -181,6 +181,13 @@ private fun tracksOf(t: Tracks, type: Int): List<TrackOpt> {
     return out
 }
 
+/** Erro do decodificador cujo formato é de áudio (o som já estava sendo decodificado no app: trocar para PCM não muda nada). */
+@OptIn(UnstableApi::class)
+private fun audioFalhaDecoder(e: PlaybackException): Boolean =
+    e.errorCode in 4001..4003 && (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let {
+        it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && MimeTypes.isAudio(it.rendererFormat?.sampleMimeType)
+    } == true
+
 @OptIn(UnstableApi::class)
 private class Engine(ctx: android.content.Context, cacheMs: Int) {
     val ok: OkHttpDataSource.Factory
@@ -203,7 +210,11 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         val load = DefaultLoadControl.Builder().setBufferDurationsMs(maxOf(15000, cache * 3), 50000, cache, maxOf(1000, cache * 2)).build()
         val rf = object : DefaultRenderersFactory(ctx) {
             override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
-                androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                // PP.somPcm(): esta TV já falhou ao mandar o som "direto" (AC3/E-AC3 pelo sistema, comum em TCL/Realtek):
+                // usa só PCM (o som é decodificado no app). Sem contexto o Builder respeita setAudioCapabilities.
+                (if (PP.somPcm()) @Suppress("DEPRECATION") androidx.media3.exoplayer.audio.DefaultAudioSink.Builder()
+                    .setAudioCapabilities(androidx.media3.exoplayer.audio.AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
+                else androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context))
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .setAudioProcessors(arrayOf<androidx.media3.common.audio.AudioProcessor>(avDelay))
@@ -302,7 +313,11 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         convOferta = null; convendo = true; convSeg = 0; err = null; wait = 0
         Conversor.iniciar(ctx, urlOriginal, req.live, modo == "audio",
             progresso = { sgs -> convSeg = sgs },
-            pronto = { local -> scope.launch { convendo = false; startAt = 0L; url = local; attempt++ } },
+            pronto = { local -> scope.launch {
+                convendo = false; startAt = 0L
+                // o "sem som" desligou a trilha de áudio: o arquivo convertido tem som que a TV toca
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_AUDIO, false).build()
+                url = local; attempt++ } },
             erro = { m -> scope.launch { convendo = false; err = m; wait = 0 } })
     }
     DisposableEffect(Unit) { onDispose { Conversor.parar() } }
@@ -359,9 +374,10 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     /** IA de imagem (só filmes e séries): nitidez leve + realce de cor por cena, na resolução do vídeo. Ao vivo vai direto. */
     fun sceneTag() = if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else ""
     fun applyAi() {
-        SceneAi.on = !req.live && PP.aiUp != "off" && ai.cap > 0
         ImageAi.direto = direto
         val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live)
+        // análise de cena (foto do quadro a cada 2 s na linha da tela) só quando a IA de imagem está de fato ligada
+        SceneAi.on = !req.live && PP.aiUp != "off" && ai.cap > 0 && (plan.effects.isNotEmpty() || plan.key == "wait")
         aiLabel = plan.label + sceneTag()
         ai.tier = plan.tier; ai.outH = plan.outH
         // modo direto: brilho/contraste/cor entram como mais um efeito (só filmes e séries; ao vivo segue direto)
@@ -459,6 +475,33 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     }
 
 
+    // Falha de som. Saída de som (5xxx ou som travado): 1º reabre o vídeo com o som em PCM e lembra nesta TV.
+    // Decodificador de áudio: 1º tenta de novo (trocar para PCM não muda nada). Se ainda falhar: toca sem som e oferece converter o áudio.
+    // Devolve false quando não há mais o que tentar (o erro segue para o aviso normal).
+    var semSom by remember { mutableStateOf(false) }
+    var somTentou by remember { mutableStateOf(false) }
+    fun falhaSom(motivo: String, saida: Boolean): Boolean {
+        if (semSom) return false
+        val p = player.currentPosition
+        val convertido = url.startsWith("file:")
+        if (saida && !convertido && PP.audioMode == "auto" && !PP.audioPcm) {
+            PP.audioPcm = true
+            Reporter.evento(ctx, "audio", "Som falhou ($motivo); passou a usar som PCM nesta TV", null)
+            // aviso do app (o desta tela some junto com ela ao reabrir)
+            st.say("O som não tocou: tentando de novo com outro modo de som")
+            save(); st.reabrirPlayer(PlayReq(req.id, req.title, req.url, req.live, if (req.live) 0L else p, req.group, req.ext, req.cacheMs, req.teste))
+            return true
+        }
+        if (!saida && !somTentou) { somTentou = true; startAt = p; attempt++; return true }
+        semSom = true
+        Reporter.evento(ctx, "audio", "Som falhou de novo ($motivo); tocando sem som", null)
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_AUDIO, true).build()
+        startAt = p; attempt++
+        if (!convertido && Conversor.disponivel()) convOferta = "audio"
+        say("Esta TV não tocou o som deste vídeo: tocando sem som")
+        return true
+    }
+    DisposableEffect(Unit) { VideoOut.tocando = true; onDispose { VideoOut.tocando = false } }
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlaybackStateChanged(s: Int) {
@@ -484,7 +527,12 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             override fun onCues(c: CueGroup) { (holder[2] as? SubtitleView)?.setCues(c.cues) }
             override fun onAudioSessionIdChanged(id: Int) { fx()?.release(); holder[3] = AudioFx(id).also { it.apply() } }
             override fun onPlayerError(e: PlaybackException) {
-                if (req.teste && e.errorCode in 2000..3999 && testeReserva < VideoOut.TESTE_RESERVA.size) { url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++; return }
+                // o som travou/falhou (5001 abrir o som, 5002 escrever o som): é o caso da TCL Smart TV Pro
+                val somSaida = e.errorCode in 5000..5999
+                if ((somSaida || audioFalhaDecoder(e)) && falhaSom(e.errorCodeName, somSaida)) return
+                // teste: rede/formato (e, no clássico, decodificador que não aguenta o 4K) passam para o próximo vídeo de reserva
+                if (req.teste) PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')
+                if (req.teste && (e.errorCode in 2000..3999 || (!direto && e.errorCode in 4000..4999)) && testeReserva < VideoOut.TESTE_RESERVA.size) { url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++; return }
                 if (direto && (e.errorCode in 7000..7999 || e.errorCode in 4000..4999)) {
                     // vídeo direto não funcionou nesta TV: volta para o clássico e lembra para os próximos vídeos
                     direto = false; if (PP.videoMode == "auto") PP.diretoFalhou = true; ai.key = ""
@@ -539,20 +587,34 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }
     LaunchedEffect(Unit) {
         var n = 0
+        var parado = 0; var ultimaPos = -1L
         while (true) { delay(500); pos = player.currentPosition; if (player.duration > 0) dur = player.duration; if (++n % 10 == 0) save(); if (n % 2 == 0) watchDrops()
+            // relógio do som travado: "pronto para tocar" mas o tempo não anda por 10 s (o som não sai e segura a imagem)
+            val travado = player.playbackState == Player.STATE_READY && player.playWhenReady && pos == ultimaPos && player.audioFormat != null && !semSom
+            parado = if (travado) parado + 1 else 0; ultimaPos = pos
+            if (parado >= 20) { parado = 0; falhaSom("som travado", true) }
             SceneAi.step()
             if (SceneAi.on && n % 4 == 0 && player.isPlaying) VideoOut.foto(vview(), 64, 36) { b -> try { SceneAi.analyze(b); if (!aiLabel.contains(SceneAi.scene)) applyAiLabel() } catch (e: Throwable) {} }
         }
     }
     // Teste de desempenho: o mesmo vídeo no clássico e no direto com IA; mede quadros perdidos e escolhe o modo.
     if (req.teste) LaunchedEffect(Unit) {
+        PlayerDiag.lastError = ""
         val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
         suspend fun fase(dir: Boolean, nome: String): Pair<Boolean, String> {
             direto = dir; ai.cap = 2; ai.key = ""
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(true).build()
             testeMsg = "Teste de desempenho · $nome…"
-            var t = 0; while ((player.videoFormat == null || !player.isPlaying) && t < 60) { delay(500); t++ }
-            if (player.videoFormat == null) return false to "$nome: o vídeo de teste não tocou"
+            var t = 0
+            while ((player.videoFormat == null || !player.isPlaying) && t < 120) {
+                delay(500); t++
+                // 20 s sem imagem (servidor lento ou fora do ar, sem erro): troca para o próximo vídeo de reserva
+                if (t % 40 == 0 && player.videoFormat == null && testeReserva < VideoOut.TESTE_RESERVA.size) {
+                    err = null; wait = 0; url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++
+                }
+            }
+            if (player.videoFormat == null) return false to "$nome: o vídeo de teste não tocou" +
+                (if (PlayerDiag.lastError.isNotEmpty()) " (${PlayerDiag.lastError})" else " (sem resposta do servidor)")
             delay(4000)
             val c0 = player.videoDecoderCounters; c0?.ensureUpdated(); val r0 = c0?.renderedOutputBufferCount ?: 0; val d0 = c0?.droppedBufferCount ?: 0
             delay(15000)

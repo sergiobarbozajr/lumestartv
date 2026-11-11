@@ -58,6 +58,10 @@ object PP {
     var controleCelular by BoolP("controleCelular", true)  // celular como controle remoto (com código de pareamento)
     var videoMode by StrP("videoDireto", "auto")   // auto | direto | classico
     var diretoFalhou by BoolP("diretoFalhou", false)
+    var audioPcm by BoolP("audioPcm", false)        // o som "direto" (AC3/E-AC3 pelo sistema) falhou nesta TV: usa PCM
+    var audioMode by StrP("saidaSom", "auto")       // auto | direto | pcm
+    /** Som decodificado no app (PCM) em vez de mandar AC3/E-AC3 direto para a TV/soundbar. */
+    fun somPcm() = when (audioMode) { "pcm" -> true; "direto" -> false; else -> audioPcm }
     var testeRes by StrP("testeDesempenho", "")
     var enviarErros by BoolP("enviarErros", true)
     var colorStyle by StrP("estiloCor", "fiel")    // fiel | vivido | cinema

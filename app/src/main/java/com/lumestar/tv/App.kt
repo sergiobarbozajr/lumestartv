@@ -197,6 +197,9 @@ class AppState(val prefs: Prefs) {
     fun focusLater(r: FocusRequester) { focusTarget = r; focusTick++ }
     fun play(r: PlayReq) { pendingOpen?.cancel(); try { Radio.parar() } catch (e: Throwable) {}; player = r }
     fun closePlayer() { player = null; refocus++ }
+    /** Recria o reprodutor do zero (ex.: trocar o modo de som), mesmo que seja o mesmo vídeo. */
+    var playerGen by mutableIntStateOf(0)
+    fun reabrirPlayer(r: PlayReq) { playerGen++; player = r }
     val overlay get() = detail != null || player != null || kb != null || newsOpen != null || exitAsk
 }
 
@@ -319,7 +322,7 @@ private fun Shell(st: AppState, args: LaunchArgs, finish: () -> Unit) {
         st.newsOpen?.let { NewsDialog(st, it) }
         st.detail?.let { DetailDialog(st, it) }
         st.kb?.let { Keyboard(st, it) }
-        st.player?.let { key(it.id, it.url) { PlayerScreen(st, it) } }
+        st.player?.let { key(it.id, it.url, st.playerGen) { PlayerScreen(st, it) } }
         if (st.exitAsk) ExitDialog(st, finish)
         Toast(st)
     }

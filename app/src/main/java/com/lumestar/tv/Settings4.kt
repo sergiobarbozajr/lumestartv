@@ -128,6 +128,9 @@ fun AiImagePanel(st: AppState, locked: Boolean) {
         T("Direto: o vídeo vai para a camada de vídeo da TV, na resolução do painel (4K chega em 4K). Clássico: o vídeo é desenhado dentro da tela do app (em TVs 4K com interface 1080p, um vídeo 4K é reduzido e ampliado de novo). No Automático, se o direto der erro, o app volta sozinho para o clássico.", 11, C.muted, lineHeight = 15)
         Opts("Saída de vídeo", linkedMapOf("auto" to "Automático", "direto" to "Direto", "classico" to "Clássico"), PP.videoMode, locked) { PP.videoMode = it; if (it == "auto") PP.diretoFalhou = false }
         T("Agora: " + VideoOut.nomeModo(), 12, C.ok)
+        Opts("Saída de som", linkedMapOf("auto" to "Automático", "direto" to "Direto (Dolby)", "pcm" to "PCM"), PP.audioMode, locked) { PP.audioMode = it; if (it == "auto") PP.audioPcm = false }
+        T(if (PP.audioMode == "auto" && PP.audioPcm) "Agora: PCM (o som direto falhou nesta TV). Escolha Automático de novo para tentar o som direto outra vez."
+          else "Direto manda o som Dolby (AC3/E-AC3) como veio, para a TV ou soundbar. PCM decodifica no app. No Automático, se o direto falhar, o app passa para PCM sozinho.", 11, C.dim, lineHeight = 15)
         Btn("▶ Fazer teste de desempenho (cerca de 1 minuto)", locked = locked, primary = true) { st.play(testeDesempenho()) }
         T(if (PP.testeRes.isNotBlank()) "Último teste: " + PP.testeRes else "O teste toca um vídeo 4K nos dois modos, mede quadros perdidos e temperatura, e deixa a TV no melhor modo.", 11, C.dim, lineHeight = 15)
     }
