@@ -20,6 +20,7 @@ Como investigar um fechamento:
 | 8 | Fecha ao atualizar pelo app | `canRequestPackageInstalls` só no Android 8+; instalador só aceita `content://` no Android 7+ | Checagem por versão; `file://` legível no Android < 7 | 0.8.4 |
 | 9 | Modo leve ligaria sem necessidade em TVs novas de 1,5 GB | Regra cautelosa demais (RAM ≤ 1,5 GB); o vazamento só existe no Android < 8 | Automático = Android < 8 ou aparelho "pouca memória"; opção **Desempenho: Automático / Completo / Leve** | 0.8.5 |
 | 10 | Celular: destaque ocupando a tela em aparelho pequeno; tablet travado em pé | Medidas fixas (420/250 dp, 2 colunas) e orientação fixa | Classe de tela (compacto < 360 dp, normal, expandido ≥ 600 dp) ajusta cartões, destaque, detalhes e grades; tablet gira | 0.8.5 |
+| 12 | TCL Smart TV Pro (Realtek, Android 14): vídeo não toca por causa do som (sem erro claro ou erro de som) | A TV diz aceitar AC3/E-AC3 "direto" pelo sistema, mas o som não abre ou trava e segura a imagem | Erro de som (5xxx), erro de decodificador de áudio ou tempo parado 10 s com som → reabre com som em PCM e lembra nesta TV; se ainda falhar, toca sem som e oferece converter o áudio | próxima |
 
 Lições gerais:
 - Testar sempre no aparelho mais fraco do público (o tank), não só no emulador (API 30).

@@ -182,6 +182,13 @@ private fun tracksOf(t: Tracks, type: Int): List<TrackOpt> {
 }
 
 @OptIn(UnstableApi::class)
+/** Erro do decodificador cujo formato é de áudio (ex.: AC3/E-AC3 que a TV diz tocar mas não abre). */
+@OptIn(UnstableApi::class)
+private fun audioFalhaDecoder(e: PlaybackException): Boolean =
+    e.errorCode in 4001..4003 && (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let {
+        it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && MimeTypes.isAudio(it.rendererFormat?.sampleMimeType)
+    } == true
+
 private class Engine(ctx: android.content.Context, cacheMs: Int) {
     val ok: OkHttpDataSource.Factory
     val ds: DefaultDataSource.Factory
@@ -203,7 +210,11 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         val load = DefaultLoadControl.Builder().setBufferDurationsMs(maxOf(15000, cache * 3), 50000, cache, maxOf(1000, cache * 2)).build()
         val rf = object : DefaultRenderersFactory(ctx) {
             override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
-                androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                // PP.audioPcm: esta TV já falhou ao mandar o som "direto" (AC3/E-AC3 pelo sistema, comum em TCL/Realtek):
+                // usa só PCM (o som é decodificado no app). Sem contexto o Builder respeita setAudioCapabilities.
+                (if (PP.audioPcm) @Suppress("DEPRECATION") androidx.media3.exoplayer.audio.DefaultAudioSink.Builder()
+                    .setAudioCapabilities(androidx.media3.exoplayer.audio.AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
+                else androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context))
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .setAudioProcessors(arrayOf<androidx.media3.common.audio.AudioProcessor>(avDelay))
@@ -459,6 +470,25 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     }
 
 
+    // Falha de som: 1º reabre o vídeo com o som em PCM (e lembra nesta TV); se ainda falhar, toca sem som e oferece converter o áudio.
+    var semSom by remember { mutableStateOf(false) }
+    fun falhaSom(motivo: String) {
+        val p = player.currentPosition
+        if (!PP.audioPcm) {
+            PP.audioPcm = true
+            Reporter.evento(ctx, "audio", "Som falhou ($motivo); passou a usar som PCM nesta TV", null)
+            say("O som não tocou: tentando de novo com outro modo de som")
+            save(); st.reabrirPlayer(PlayReq(req.id, req.title, req.url, req.live, if (req.live) 0L else p, req.group, req.ext, req.cacheMs, req.teste))
+            return
+        }
+        if (semSom) return
+        semSom = true
+        Reporter.evento(ctx, "audio", "Som falhou mesmo em PCM ($motivo); tocando sem som", null)
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_AUDIO, true).build()
+        startAt = p; attempt++
+        if (!url.startsWith("file:") && Conversor.disponivel()) convOferta = "audio"
+        say("Esta TV não tocou o som deste vídeo: tocando sem som")
+    }
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlaybackStateChanged(s: Int) {
@@ -484,6 +514,8 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             override fun onCues(c: CueGroup) { (holder[2] as? SubtitleView)?.setCues(c.cues) }
             override fun onAudioSessionIdChanged(id: Int) { fx()?.release(); holder[3] = AudioFx(id).also { it.apply() } }
             override fun onPlayerError(e: PlaybackException) {
+                // o som travou/falhou (5001 abrir o som, 5002 escrever o som): é o caso da TCL Smart TV Pro
+                if (e.errorCode in 5000..5999 || audioFalhaDecoder(e)) { falhaSom(e.errorCodeName); return }
                 if (req.teste && e.errorCode in 2000..3999 && testeReserva < VideoOut.TESTE_RESERVA.size) { url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++; return }
                 if (direto && (e.errorCode in 7000..7999 || e.errorCode in 4000..4999)) {
                     // vídeo direto não funcionou nesta TV: volta para o clássico e lembra para os próximos vídeos
@@ -538,7 +570,12 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }
     LaunchedEffect(Unit) {
         var n = 0
+        var parado = 0; var ultimaPos = -1L
         while (true) { delay(500); pos = player.currentPosition; if (player.duration > 0) dur = player.duration; if (++n % 10 == 0) save(); if (n % 2 == 0) watchDrops()
+            // relógio do som travado: "pronto para tocar" mas o tempo não anda por 10 s (o som não sai e segura a imagem)
+            val travado = player.playbackState == Player.STATE_READY && player.playWhenReady && pos == ultimaPos && player.audioFormat != null && !semSom
+            parado = if (travado) parado + 1 else 0; ultimaPos = pos
+            if (parado >= 20) { parado = 0; falhaSom("som travado") }
             SceneAi.step()
             if (SceneAi.on && n % 4 == 0 && player.isPlaying) VideoOut.foto(vview(), 64, 36) { b -> try { SceneAi.analyze(b); if (!aiLabel.contains(SceneAi.scene)) applyAiLabel() } catch (e: Throwable) {} }
         }
