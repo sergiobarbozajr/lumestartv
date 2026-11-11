@@ -189,7 +189,7 @@ private fun audioFalhaDecoder(e: PlaybackException): Boolean =
     } == true
 
 @OptIn(UnstableApi::class)
-private class Engine(ctx: android.content.Context, cacheMs: Int) {
+private class Engine(ctx: android.content.Context, cacheMs: Int, live: Boolean = false) {
     val ok: OkHttpDataSource.Factory
     val ds: DefaultDataSource.Factory
     val msf: DefaultMediaSourceFactory
@@ -207,7 +207,9 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
         // mais paciência com servidores instáveis: cada pedaço de vídeo tenta de novo até 6 vezes antes de dar erro
         msf = DefaultMediaSourceFactory(ds).setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(6))
         val cache = cacheMs.coerceIn(300, 10000)
-        val load = DefaultLoadControl.Builder().setBufferDurationsMs(maxOf(15000, cache * 3), 50000, cache, maxOf(1000, cache * 2)).build()
+        // ao vivo começa com metade do pedaço carregado (troca de canal mais rápida); filme e série seguem o configurado
+        val inicio = if (live) maxOf(300, cache / 2) else cache
+        val load = DefaultLoadControl.Builder().setBufferDurationsMs(maxOf(15000, cache * 3), 50000, inicio, maxOf(1000, cache * 2)).build()
         val rf = object : DefaultRenderersFactory(ctx) {
             override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
                 // PP.somPcm(): esta TV já falhou ao mandar o som "direto" (AC3/E-AC3 pelo sistema, comum em TCL/Realtek):
@@ -282,7 +284,7 @@ private class Engine(ctx: android.content.Context, cacheMs: Int) {
 @Composable
 fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     val ctx = LocalContext.current
-    val eng = remember { Engine(ctx, if (req.cacheMs > 0) req.cacheMs else PP.cacheMs) }
+    val eng = remember { Engine(ctx, if (req.cacheMs > 0) req.cacheMs else PP.cacheMs, req.live) }
     val player = eng.player
     var triedVlc by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf(req.url) }
@@ -327,6 +329,11 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     var osdId by remember { mutableIntStateOf(0) }
     var wantPlay by remember { mutableIntStateOf(1) }
     var aiLabel by remember { mutableStateOf("") }
+    var tInicio by remember { mutableStateOf(0L) }
+    var inicioMs by remember { mutableStateOf(-1L) } // tempo até o 1º quadro na tela
+    var faixasAuto by remember { mutableStateOf(PP.faixasAuto) }
+    var faixasManual by remember(url) { mutableStateOf(false) } // o usuário ajustou: o automático para neste vídeo
+    var medindo by remember { mutableStateOf(false) }
     var cmpOn by remember { mutableStateOf(false) }
     // estado da IA de imagem neste vídeo: cap = limite do disjuntor (2 Ultra, 1 Alta, 0 sem reforço)
     val ai = remember { object { var key = ""; var cap = 2; var hadFx = false; var compare = false; var lost = 0L; var stable = 0; var tier = 0; var outH = 0; var hot = 0; var bestOn = false; var buffered = false; val hist = LongArray(10); var idx = 0 } }
@@ -451,27 +458,31 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         if (best.modeId != cur.modeId) act.window.attributes = act.window.attributes.also { it.preferredDisplayModeId = best.modeId }
     }
 
-    fun medirFaixas(bmp: android.graphics.Bitmap) {
-        fun dark(x: Int, y: Int): Boolean { val p = bmp.getPixel(x, y); return (((p shr 16) and 255) * 3 + ((p shr 8) and 255) * 6 + (p and 255)) / 10 < 20 }
-        fun rowDark(y: Int) = (0 until 96 step 4).count { dark(it, y) } >= 22
-        fun colDark(x: Int) = (0 until 54 step 3).count { dark(x, it) } >= 17
-        var top = 0; while (top < 20 && rowDark(top)) top++
-        var bot = 0; while (bot < 20 && rowDark(53 - bot)) bot++
-        var lef = 0; while (lef < 36 && colDark(lef)) lef++
-        var rig = 0; while (rig < 36 && colDark(95 - rig)) rig++
-        val fv = (top + bot) / 54f; val fh = (lef + rig) / 96f
-        PP.fit = 0
-        PP.fitV = if (fv > .04f) ((1 / (1 - fv) - 1) * 100).toInt().coerceAtMost(40) else 0
-        PP.fitH = if (fh > .04f) ((1 / (1 - fh) - 1) * 100).toInt().coerceAtMost(40) else 0
-        layoutVideo()
-        say(if (PP.fitV == 0 && PP.fitH == 0) "Este vídeo não tem faixas pretas" else "Faixas removidas: " + listOfNotNull(if (PP.fitV > 0) "cima e baixo +${PP.fitV}%" else null, if (PP.fitH > 0) "laterais +${PP.fitH}%" else null).joinToString(" · "))
+    /** Junta ~8 quadros em 4 s e mede as faixas (Faixas.medir). null = sem imagem para medir. */
+    suspend fun coletarFaixas(): Pair<Int, Int>? {
+        val q = ArrayList<android.graphics.Bitmap>()
+        repeat(8) { if (player.isPlaying) VideoOut.foto(vview(), Faixas.W, Faixas.H) { b -> q.add(b) }; delay(500) }
+        delay(300) // no modo direto a foto chega um pouco depois
+        val r = try { Faixas.medir(q) } catch (e: Throwable) { null }
+        q.forEach { it.recycle() }
+        return r
     }
 
-    /** Tira as faixas pretas: olha uma foto pequena do vídeo e mede as bordas escuras. */
+    fun aplicarFaixas(r: Pair<Int, Int>, aviso: Boolean) {
+        PP.fit = 0; PP.fitV = r.first; PP.fitH = r.second
+        layoutVideo()
+        if (aviso) say(if (r.first == 0 && r.second == 0) "Este vídeo não tem faixas pretas" else "Faixas removidas: " + listOfNotNull(if (r.first > 0) "cima e baixo +${r.first}%" else null, if (r.second > 0) "laterais +${r.second}%" else null).joinToString(" · "))
+    }
+
+    /** Botão "Tirar faixas pretas": mede agora (4 s) e aplica. */
     fun autoBars() {
-        var achou = false
-        VideoOut.foto(vview(), 96, 54) { b -> achou = true; medirFaixas(b) }
-        if (!achou && vview() is TextureView) say("Ainda sem imagem para medir")
+        if (medindo) return
+        medindo = true; faixasManual = true
+        say("Medindo as faixas pretas…")
+        scope.launch {
+            val r = coletarFaixas(); medindo = false
+            if (r == null) say("Imagem escura demais para medir: tente numa cena mais clara") else aplicarFaixas(r, true)
+        }
     }
 
 
@@ -511,6 +522,9 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 if (s == Player.STATE_ENDED && !req.live) { save(); st.closePlayer() }
             }
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
+            override fun onRenderedFirstFrame() {
+                if (tInicio > 0 && inicioMs < 0) { inicioMs = android.os.SystemClock.elapsedRealtime() - tInicio; android.util.Log.i("LumeStar", "tempo até tocar: $inicioMs ms") }
+            }
             override fun onTracksChanged(t: Tracks) {
                 if (!url.startsWith("file:") && !convendo && Conversor.disponivel()) {
                     fun semSuporte(tipo: Int) = t.groups.any { it.type == tipo } && t.groups.none { it.type == tipo && it.isSupported }
@@ -583,7 +597,27 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         onDispose { ciclo.lifecycle.removeObserver(obs) }
     }
     LaunchedEffect(Unit) { PlayerDiag.rebuffers = 0; PlayerDiag.lastTitle = req.title; SceneAi.reset(!req.live && PP.aiUp != "off") }
-    LaunchedEffect(url, attempt, subUrl, audioUrl) { eng.load(url, subUrl, audioUrl, if (req.live) 0L else startAt) }
+    LaunchedEffect(url, attempt, subUrl, audioUrl) { tInicio = android.os.SystemClock.elapsedRealtime(); inicioMs = -1L; eng.load(url, subUrl, audioUrl, if (req.live) 0L else startAt) }
+    // Faixas automáticas: mede quando o vídeo começa e confere a cada ~30 s (canais trocam de formato nos comerciais).
+    // Só muda o corte quando duas medições seguidas concordam, para a imagem não ficar pulando.
+    LaunchedEffect(url, faixasAuto) {
+        // com o modo Preencher/Zoom escolhido, o usuário já decidiu o enquadramento: o automático não briga com ele
+        if (!faixasAuto || PP.fit != 0) return@LaunchedEffect
+        if (PP.fitV != 0 || PP.fitH != 0) { PP.fitV = 0; PP.fitH = 0; layoutVideo() }
+        var anterior: Pair<Int, Int>? = null
+        while (true) {
+            var t = 0; while (!player.isPlaying && t < 240) { delay(500); t++ }
+            delay(3000)
+            if (faixasManual) break
+            if (!player.isPlaying || medindo) continue
+            medindo = true; val r = coletarFaixas(); medindo = false
+            if (faixasManual) break
+            if (r != null && anterior != null && Faixas.perto(r, anterior!!) && !Faixas.perto(r, PP.fitV to PP.fitH)) aplicarFaixas(r, false)
+            val primeira = anterior == null
+            anterior = r
+            delay(if (primeira) 0L else 23000L)
+        }
+    }
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait--; if (wait == 0) { err = null; startAt = player.currentPosition; attempt++ } } }
     LaunchedEffect(Unit) {
         var n = 0
@@ -756,6 +790,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 val v = vsize
                 val badges = listOfNotNull(
                     if (v.height > 0) "${v.height}p" else null,
+                    if (inicioMs >= 0) "⏱ " + String.format(java.util.Locale("pt", "BR"), "%.1f s", inicioMs / 1000f) else null,
                     aiLabel.ifBlank { null }?.let { "✦ $it" },
                     if (PP.enhance != "off") "Realce ${ENHANCE[PP.enhance]}" else null,
                     if (PP.preset != "padrao") "☀ ${PRESETS[PP.preset]}" else null,
@@ -842,13 +877,18 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                         T("⛶ Ajuste de tela", 16, C.fg, FontWeight.Bold)
                         val v = vsize
                         T(if (v.width > 0) "Vídeo ${v.width} × ${v.height}" else "Medindo o vídeo…", 11, C.muted)
-                        Box(Modifier.focusRequester(panelFocus)) { Opts("Modo", FITS.indices.associate { it.toString() to FITS[it] }, PP.fit.toString()) { s -> PP.fit = s.toInt(); layoutVideo() } }
-                        Stepper("Cima e baixo (ampliar)", PP.fitV, "%") { d -> PP.fitV = (PP.fitV + d * 2).coerceIn(0, 40); layoutVideo() }
-                        Stepper("Esquerda e direita (ampliar)", PP.fitH, "%") { d -> PP.fitH = (PP.fitH + d * 2).coerceIn(0, 40); layoutVideo() }
+                        Box(Modifier.focusRequester(panelFocus)) { Opts("Modo", FITS.indices.associate { it.toString() to FITS[it] }, PP.fit.toString()) { s -> faixasManual = true; PP.fit = s.toInt(); layoutVideo() } }
+                        Stepper("Cima e baixo (ampliar)", PP.fitV, "%") { d -> faixasManual = true; PP.fitV = (PP.fitV + d * 2).coerceIn(0, 40); layoutVideo() }
+                        Stepper("Esquerda e direita (ampliar)", PP.fitH, "%") { d -> faixasManual = true; PP.fitH = (PP.fitH + d * 2).coerceIn(0, 40); layoutVideo() }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Btn("✦ Tirar faixas pretas", locked = false, primary = true) { autoBars() }
-                            Btn("Restaurar", locked = false) { PP.fit = 0; PP.fitV = 0; PP.fitH = 0; layoutVideo(); say("Tela restaurada") }
+                            Btn(if (medindo) "Medindo…" else "✦ Tirar faixas pretas", locked = false, primary = true) { autoBars() }
+                            Btn("Restaurar", locked = false) { faixasManual = true; PP.fit = 0; PP.fitV = 0; PP.fitH = 0; layoutVideo(); say("Tela restaurada") }
                         }
+                        Btn(if (faixasAuto) "Faixas automáticas: ligado" else "Faixas automáticas: desligado", locked = false) {
+                            faixasAuto = !faixasAuto; PP.faixasAuto = faixasAuto
+                            if (faixasAuto) { faixasManual = false; say("Faixas automáticas ligadas: medindo em alguns segundos") } else say("Faixas automáticas desligadas")
+                        }
+                        T("No automático o app mede as bordas em vários quadros quando o vídeo começa e confere de novo a cada 30 s. Se você ajustar à mão, ele para neste vídeo.", 11, C.dim, lineHeight = 15)
                     }
                     "som" -> {
                         T("♪ Som", 16, C.fg, FontWeight.Bold)

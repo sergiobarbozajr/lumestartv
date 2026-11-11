@@ -18,8 +18,8 @@ android {
         applicationId = "com.lumestar.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 52
-        versionName = "0.9.9"
+        versionCode = 53
+        versionName = "0.10.0"
         // conversor nativo: FFmpeg só para ARM 32 e 64 bits (TVs e celulares)
         // (-Pteste: também x86_64, só para o APK do teste no emulador, que não roda as instruções ARM do FFmpeg)
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") + (if (project.hasProperty("teste")) listOf("x86_64") else emptyList()) }
