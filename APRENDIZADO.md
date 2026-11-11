@@ -20,6 +20,7 @@ Como investigar um fechamento:
 | 8 | Fecha ao atualizar pelo app | `canRequestPackageInstalls` só no Android 8+; instalador só aceita `content://` no Android 7+ | Checagem por versão; `file://` legível no Android < 7 | 0.8.4 |
 | 9 | Modo leve ligaria sem necessidade em TVs novas de 1,5 GB | Regra cautelosa demais (RAM ≤ 1,5 GB); o vazamento só existe no Android < 8 | Automático = Android < 8 ou aparelho "pouca memória"; opção **Desempenho: Automático / Completo / Leve** | 0.8.5 |
 | 10 | Celular: destaque ocupando a tela em aparelho pequeno; tablet travado em pé | Medidas fixas (420/250 dp, 2 colunas) e orientação fixa | Classe de tela (compacto < 360 dp, normal, expandido ≥ 600 dp) ajusta cartões, destaque, detalhes e grades; tablet gira | 0.8.5 |
+| 13 | Android 10 ou mais antigo: vídeo, som e controle travam juntos durante a reprodução | IA de imagem (efeito na placa) ligava antes do diagnóstico ou em placa lenta; o diagnóstico de GPU podia rodar com vídeo aberto; foto do quadro a cada 2 s na linha da tela mesmo sem IA | Android < 11: IA só depois do diagnóstico e com placa nível ≥ 1; diagnóstico espera o vídeo fechar; análise de cena só com a IA ligada | próxima |
 
 Lições gerais:
 - Testar sempre no aparelho mais fraco do público (o tank), não só no emulador (API 30).

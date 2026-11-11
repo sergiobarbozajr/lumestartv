@@ -359,9 +359,10 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     /** IA de imagem (só filmes e séries): nitidez leve + realce de cor por cena, na resolução do vídeo. Ao vivo vai direto. */
     fun sceneTag() = if (!req.live && SceneAi.on && SceneAi.scene.isNotBlank()) " · cena: ${SceneAi.scene}" else ""
     fun applyAi() {
-        SceneAi.on = !req.live && PP.aiUp != "off" && ai.cap > 0
         ImageAi.direto = direto
         val plan = ImageAi.plan(PP.aiUp, player.videoFormat, ai.cap, ai.compare, req.live)
+        // análise de cena (foto do quadro a cada 2 s na linha da tela) só quando a IA de imagem está de fato ligada
+        SceneAi.on = !req.live && PP.aiUp != "off" && ai.cap > 0 && (plan.effects.isNotEmpty() || plan.key == "wait")
         aiLabel = plan.label + sceneTag()
         ai.tier = plan.tier; ai.outH = plan.outH
         // modo direto: brilho/contraste/cor entram como mais um efeito (só filmes e séries; ao vivo segue direto)
@@ -459,6 +460,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     }
 
 
+    DisposableEffect(Unit) { VideoOut.tocando = true; onDispose { VideoOut.tocando = false } }
     DisposableEffect(Unit) {
         val l = object : Player.Listener {
             override fun onPlaybackStateChanged(s: Int) {
