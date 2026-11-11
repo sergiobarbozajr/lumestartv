@@ -56,7 +56,13 @@ object ImageAi {
     }
 
     /** Placa fraca demais ou modo leve: a IA fica desligada para não travar. */
-    fun semPlaca(): Boolean = (GpuProbe.result?.ms1080 ?: 0f) >= 30f && (GpuProbe.result?.msLite ?: 0f) >= 30f
+    fun semPlaca(): Boolean {
+        val r = GpuProbe.result
+        // Android 10 ou mais antigo: a IA só liga depois do diagnóstico e se a placa couber no orçamento (nível ≥ 1);
+        // antes disso o reforço rodava em placas lentas e travava vídeo, som e controle juntos
+        if (android.os.Build.VERSION.SDK_INT < 30 && (r == null || r.maxTier == 0)) return true
+        return (r?.ms1080 ?: 0f) >= 30f && (r?.msLite ?: 0f) >= 30f
+    }
 
     /**
      * Resolução de saída automática. cap (disjuntor): 2 = pode ampliar, 1 = só na resolução do vídeo.

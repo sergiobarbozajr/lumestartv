@@ -27,6 +27,9 @@ object VideoOut {
     )
 
     /** Modo inicial deste aparelho: Automático usa o direto (Android 7+, fora do modo leve) até ele falhar. */
+    /** true enquanto um vídeo está aberto (o diagnóstico pesado de GPU espera o vídeo fechar). */
+    @Volatile var tocando = false
+
     fun direto(): Boolean = Build.VERSION.SDK_INT >= 24 && !Perf.lite && when (PP.videoMode) {
         "direto" -> true; "classico" -> false; else -> !PP.diretoFalhou
     }
