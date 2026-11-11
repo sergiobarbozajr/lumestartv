@@ -77,6 +77,7 @@ object PP {
     var fit by IntP("telaModo", 0)              // 0 original · 1 preencher · 2 zoom
     var fitV by IntP("telaVertical", 0)
     var fitH by IntP("telaHorizontal", 0)
+    var faixasAuto by BoolP("faixasAuto", true)     // mede e tira as faixas pretas sozinho em cada vídeo
     // som
     var audioAi by StrP("iaAudio", "auto")     // off | auto | dialogo | cinema | noturno
     var eq by StrP("equalizador", "padrao")

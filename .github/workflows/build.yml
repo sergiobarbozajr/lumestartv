@@ -120,6 +120,7 @@ jobs:
   teste:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # o emulador às vezes trava; sem limite seguraria a publicação por até 6 h
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
