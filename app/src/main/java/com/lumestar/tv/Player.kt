@@ -471,8 +471,8 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             override fun onTracksChanged(t: Tracks) {
                 if (!url.startsWith("file:") && !convendo && Conversor.disponivel()) {
                     fun semSuporte(tipo: Int) = t.groups.any { it.type == tipo } && t.groups.none { it.type == tipo && it.isSupported }
-                    if (semSuporte(MC.TRACK_TYPE_VIDEO)) convOferta = "video"
-                    else if (semSuporte(MC.TRACK_TYPE_AUDIO)) convOferta = "audio"
+                    if (semSuporte(MC.TRACK_TYPE_VIDEO)) { convOferta = "video"; android.util.Log.i("LumeStar", "conversor: oferta video (trilha de vídeo sem suporte)") }
+                    else if (semSuporte(MC.TRACK_TYPE_AUDIO)) { convOferta = "audio"; android.util.Log.i("LumeStar", "conversor: oferta audio (trilha de som sem suporte)") }
                 }
                 val hadExt = audioUrl != null && tracksOf(tracks, MC.TRACK_TYPE_AUDIO).size < tracksOf(t, MC.TRACK_TYPE_AUDIO).size
                 tracks = t
@@ -511,7 +511,8 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                     // só o som não toca (ex.: AC3/DTS): converte só o áudio, bem mais rápido
                     val soSom = (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let { it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && androidx.media3.common.MimeTypes.isAudio(it.rendererFormat?.sampleMimeType) } == true
                     val videoSemSuporte = tracks.groups.any { it.type == MC.TRACK_TYPE_VIDEO && !it.isSupported }
-                    convOferta = if (soSom && !videoSemSuporte) "audio" else "video"; err = null; wait = 0; return
+                    convOferta = if (soSom && !videoSemSuporte) "audio" else "video"; err = null; wait = 0
+                    android.util.Log.i("LumeStar", "conversor: oferta ${convOferta} (erro ${e.errorCodeName}, ${(e as? androidx.media3.exoplayer.ExoPlaybackException)?.rendererFormat?.sampleMimeType})"); return
                 }
                 PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' '); PlayerDiag.lastTitle = req.title; PlayerDiag.lastAt = System.currentTimeMillis()
                 err = "Não foi possível reproduzir (${e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')})."

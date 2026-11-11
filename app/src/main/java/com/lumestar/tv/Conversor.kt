@@ -90,8 +90,10 @@ object Conversor {
             "copy" -> a += listOf("-c:v", "copy")
             else -> a += listOf("-vf", "scale='min(1280,iw)':-2", "-c:v", "mpeg4", "-q:v", "4", "-g", "60", "-threads", "4")
         }
+        // pedaços em MP4 fragmentado (o player do Android lê MPEG-4 e AAC nele sem problema; em TS o MPEG-4 dava "malformed")
         a += listOf("-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", "48000",
-            "-f", "hls", "-hls_time", "4", "-hls_segment_filename", File(dir, "p%05d.ts").absolutePath)
+            "-f", "hls", "-hls_time", "4", "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
+            "-hls_segment_filename", File(dir, "p%05d.m4s").absolutePath)
         a += if (live) listOf("-hls_list_size", "10", "-hls_flags", "delete_segments") else listOf("-hls_list_size", "0", "-hls_playlist_type", "event")
         a += saida.absolutePath
         return a
