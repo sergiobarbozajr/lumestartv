@@ -77,7 +77,7 @@ object Reporter {
             .put("android", "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})").put("chip", Build.HARDWARE)
             .put("desempenho", Perf.reason).put("tipo", tipo).put("assinatura", assinatura(tipo, texto))
             .put("resumo", resumo).put("texto", texto)
-            .put("ia", "${PP.aiUp} · saída ${PP.videoMode}${if (PP.diretoFalhou) " (direto falhou antes)" else ""}")
+            .put("ia", "${PP.aiUp} · saída ${PP.videoMode}${if (PP.diretoFalhou) " (direto falhou antes)" else ""} · som ${PP.audioMode}${if (PP.audioPcm) " (som direto falhou antes)" else ""}")
         return try {
             val con = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             con.requestMethod = "POST"; con.doOutput = true; con.connectTimeout = 15000; con.readTimeout = 15000
