@@ -90,8 +90,10 @@ object Conversor {
             "copy" -> a += listOf("-c:v", "copy")
             else -> a += listOf("-vf", "scale='min(1280,iw)':-2", "-c:v", "mpeg4", "-q:v", "4", "-g", "60", "-threads", "4")
         }
+        // pedaços em MP4 fragmentado (o player do Android lê MPEG-4 e AAC nele sem problema; em TS o MPEG-4 dava "malformed")
         a += listOf("-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", "48000",
-            "-f", "hls", "-hls_time", "4", "-hls_segment_filename", File(dir, "p%05d.ts").absolutePath)
+            "-f", "hls", "-hls_time", "4", "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
+            "-hls_segment_filename", File(dir, "p%05d.m4s").absolutePath)
         a += if (live) listOf("-hls_list_size", "10", "-hls_flags", "delete_segments") else listOf("-hls_list_size", "0", "-hls_playlist_type", "event")
         a += saida.absolutePath
         return a
@@ -146,6 +148,7 @@ object ProxyLocal {
             val rb = Request.Builder().url(e.url).header("User-Agent", e.userAgent ?: "VLC/3.0.20 LibVLC/3.0.20")
             e.outros.forEach { (k, v) -> rb.header(k, v) }
             if (range != null) rb.header("Range", range)
+            rb.header("Accept-Encoding", "identity") // sem gzip: o tamanho e os saltos (Range) têm que bater com o arquivo
             http.newCall(rb.build()).execute().use { r ->
                 val out = s.getOutputStream()
                 val tipo = r.header("Content-Type").orEmpty()
@@ -164,11 +167,25 @@ object ProxyLocal {
                     out.write("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: ${corpo.size}\r\nConnection: close\r\n\r\n".toByteArray())
                     out.write(corpo); out.flush(); return
                 }
-                val cab = StringBuilder("HTTP/1.1 ${r.code} ${r.message.ifBlank { "OK" }}\r\n")
-                listOf("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges").forEach { h -> r.header(h)?.let { cab.append("$h: $it\r\n") } }
+                // o FFmpeg precisa pular dentro do arquivo (ex.: MP4 com o índice no fim). Se o servidor ignorar o Range
+                // e mandar o arquivo inteiro (200), o proxy pula os bytes aqui e responde 206 como se o servidor soubesse.
+                val inicio = range?.let { Regex("bytes=(\\d+)-").find(it)?.groupValues?.get(1)?.toLongOrNull() } ?: 0L
+                val total = r.header("Content-Length")?.toLongOrNull()
+                val cab = StringBuilder()
+                val corpo = r.body?.byteStream()
+                if (r.code == 200 && inicio > 0 && total != null && inicio < total) {
+                    cab.append("HTTP/1.1 206 Partial Content\r\nContent-Length: ${total - inicio}\r\nContent-Range: bytes $inicio-${total - 1}/$total\r\n")
+                    var falta = inicio; val lixo = ByteArray(64 * 1024)
+                    while (falta > 0) { val n = corpo?.read(lixo, 0, minOf(lixo.size.toLong(), falta).toInt()) ?: -1; if (n < 0) break; falta -= n }
+                } else {
+                    cab.append("HTTP/1.1 ${r.code} ${r.message.ifBlank { "OK" }}\r\n")
+                    listOf("Content-Length", "Content-Range").forEach { h -> r.header(h)?.let { cab.append("$h: $it\r\n") } }
+                }
+                r.header("Content-Type")?.let { cab.append("Content-Type: $it\r\n") }
+                if (total != null || r.header("Content-Range") != null) cab.append("Accept-Ranges: bytes\r\n")
                 cab.append("Connection: close\r\n\r\n")
                 out.write(cab.toString().toByteArray())
-                r.body?.byteStream()?.use { it.copyTo(out, 64 * 1024) }
+                corpo?.use { it.copyTo(out, 64 * 1024) }
                 out.flush()
             }
         } catch (e: Throwable) { android.util.Log.w("LumeStar", "proxy local: ${e.message}") }
