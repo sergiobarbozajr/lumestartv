@@ -530,7 +530,9 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 // o som travou/falhou (5001 abrir o som, 5002 escrever o som): é o caso da TCL Smart TV Pro
                 val somSaida = e.errorCode in 5000..5999
                 if ((somSaida || audioFalhaDecoder(e)) && falhaSom(e.errorCodeName, somSaida)) return
-                if (req.teste && e.errorCode in 2000..3999 && testeReserva < VideoOut.TESTE_RESERVA.size) { url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++; return }
+                // teste: rede/formato (e, no clássico, decodificador que não aguenta o 4K) passam para o próximo vídeo de reserva
+                if (req.teste) PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')
+                if (req.teste && (e.errorCode in 2000..3999 || (!direto && e.errorCode in 4000..4999)) && testeReserva < VideoOut.TESTE_RESERVA.size) { url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++; return }
                 if (direto && (e.errorCode in 7000..7999 || e.errorCode in 4000..4999)) {
                     // vídeo direto não funcionou nesta TV: volta para o clássico e lembra para os próximos vídeos
                     direto = false; if (PP.videoMode == "auto") PP.diretoFalhou = true; ai.key = ""
@@ -597,13 +599,22 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     }
     // Teste de desempenho: o mesmo vídeo no clássico e no direto com IA; mede quadros perdidos e escolhe o modo.
     if (req.teste) LaunchedEffect(Unit) {
+        PlayerDiag.lastError = ""
         val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
         suspend fun fase(dir: Boolean, nome: String): Pair<Boolean, String> {
             direto = dir; ai.cap = 2; ai.key = ""
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(true).build()
             testeMsg = "Teste de desempenho · $nome…"
-            var t = 0; while ((player.videoFormat == null || !player.isPlaying) && t < 60) { delay(500); t++ }
-            if (player.videoFormat == null) return false to "$nome: o vídeo de teste não tocou"
+            var t = 0
+            while ((player.videoFormat == null || !player.isPlaying) && t < 120) {
+                delay(500); t++
+                // 20 s sem imagem (servidor lento ou fora do ar, sem erro): troca para o próximo vídeo de reserva
+                if (t % 40 == 0 && player.videoFormat == null && testeReserva < VideoOut.TESTE_RESERVA.size) {
+                    err = null; wait = 0; url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++
+                }
+            }
+            if (player.videoFormat == null) return false to "$nome: o vídeo de teste não tocou" +
+                (if (PlayerDiag.lastError.isNotEmpty()) " (${PlayerDiag.lastError})" else " (sem resposta do servidor)")
             delay(4000)
             val c0 = player.videoDecoderCounters; c0?.ensureUpdated(); val r0 = c0?.renderedOutputBufferCount ?: 0; val d0 = c0?.droppedBufferCount ?: 0
             delay(15000)
