@@ -33,7 +33,7 @@ jobs:
       - name: Baixar o FFmpeg do conversor (compilado por nós, 32 e 64 bits)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: mkdir -p app/libs && gh release download ffmpeg-kit-lume-6.0-1 -p ffmpeg-kit-lume.aar -D app/libs --clobber --repo ${{ github.repository }}
+        run: mkdir -p app/libs && gh release download ffmpeg-kit-lume-6.0-2 -p ffmpeg-kit-lume.aar -D app/libs --clobber --repo ${{ github.repository }}
 
       - name: Preparar o Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -68,11 +68,25 @@ jobs:
           echo "name=$V" >> "$GITHUB_OUTPUT"
           cp app/build/outputs/apk/release/app-release.apk LumeStarTV.apk
 
+      - name: APK de teste (com x86_64 para o emulador; não é publicado)
+        env:
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
+          TMDB_KEY_2: ${{ secrets.TMDB_KEY_2 }}
+          STORE_FILE: ${{ runner.temp }}/lumestar.keystore
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle :app:assembleRelease -Pteste --no-daemon -q
+          cp app/build/outputs/apk/release/app-release.apk LumeStarTV-teste.apk
+
       - name: Guardar o APK
         uses: actions/upload-artifact@v4
         with:
           name: LumeStarTV-apk
-          path: LumeStarTV.apk
+          path: |
+            LumeStarTV.apk
+            LumeStarTV-teste.apk
           if-no-files-found: error
 
   # Lista as chamadas a recursos que não existem no Android 5.1 (minSdk 21).
@@ -91,7 +105,7 @@ jobs:
       - name: Baixar o FFmpeg do conversor
         env:
           GH_TOKEN: ${{ github.token }}
-        run: mkdir -p app/libs && gh release download ffmpeg-kit-lume-6.0-1 -p ffmpeg-kit-lume.aar -D app/libs --clobber --repo ${{ github.repository }} || true
+        run: mkdir -p app/libs && gh release download ffmpeg-kit-lume-6.0-2 -p ffmpeg-kit-lume.aar -D app/libs --clobber --repo ${{ github.repository }} || true
       - name: Verificar compatibilidade com Android 5 (lint NewApi)
         run: gradle :app:lintDebug --no-daemon || true
       - name: Enviar relatorio para o ramo "lint"
@@ -121,7 +135,7 @@ jobs:
         with:
           api-level: 30
           arch: x86_64
-          target: google_apis
+          target: default
           disable-animations: false
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -no-snapshot -camera-back none -memory 3072

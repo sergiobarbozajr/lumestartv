@@ -8,7 +8,7 @@ LISTA="https://raw.githubusercontent.com/${GITHUB_REPOSITORY:-sergiobarbozajr/lu
 shot() { adb exec-out screencap -p > "teste/$1.png" 2>/dev/null || true; }
 key() { adb shell input keyevent "$1"; sleep "${2:-0.6}"; }
 
-adb install -r LumeStarTV.apk > teste/instalar.txt 2>&1 || { echo "nao instalou" > teste/falhou.txt; exit 0; }
+adb install -r $( [ -f LumeStarTV-teste.apk ] && echo LumeStarTV-teste.apk || echo LumeStarTV.apk ) > teste/instalar.txt 2>&1 || { echo "nao instalou" > teste/falhou.txt; exit 0; }
 adb logcat -c
 adb shell am start -n $PKG/.MainActivity --es modo tv > /dev/null
 START=$(date +%s%N)

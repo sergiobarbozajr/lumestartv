@@ -21,7 +21,8 @@ android {
         versionCode = 50
         versionName = "0.9.7"
         // conversor nativo: FFmpeg só para ARM 32 e 64 bits (TVs e celulares)
-        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
+        // (-Pteste: também x86_64, só para o APK do teste no emulador, que não roda as instruções ARM do FFmpeg)
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") + (if (project.hasProperty("teste")) listOf("x86_64") else emptyList()) }
         // chave padrão do TMDB: vem do segredo TMDB_KEY do GitHub na hora de compilar (nunca fica no código)
         buildConfigField("String", "TMDB_KEY", "\"" + (System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() } + "\"")
         buildConfigField("String", "TMDB_KEY2", "\"" + (System.getenv("TMDB_KEY_2") ?: "").filter { it.isLetterOrDigit() } + "\"")
