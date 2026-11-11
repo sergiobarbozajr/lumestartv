@@ -365,7 +365,8 @@ void main() {
   vec3 res = clamp(o, 0.0, 1.0);
   if (uSplit > 0.0) {
     if (uv.x < uSplit) res = tx(uv);
-    if (abs(uv.x - uSplit) < uTexel.x * 1.2) res = vec3(1.0);
+    // linha preta grossa (~12 px numa tela 1080p) para separar bem original | IA
+    if (abs(uv.x - uSplit) < 0.003) res = vec3(0.0);
   }
   gl_FragColor = vec4(res, 1.0);
 }
