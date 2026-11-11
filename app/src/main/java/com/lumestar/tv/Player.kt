@@ -181,12 +181,15 @@ private fun tracksOf(t: Tracks, type: Int): List<TrackOpt> {
     return out
 }
 
-/** Erro do decodificador cujo formato é de áudio (o som já estava sendo decodificado no app: trocar para PCM não muda nada). */
+/** Erro vindo do renderizador de som (formato de áudio): não é culpa da saída de vídeo. */
 @OptIn(UnstableApi::class)
-private fun audioFalhaDecoder(e: PlaybackException): Boolean =
-    e.errorCode in 4001..4003 && (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let {
+private fun erroDoSom(e: PlaybackException): Boolean =
+    (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let {
         it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && MimeTypes.isAudio(it.rendererFormat?.sampleMimeType)
     } == true
+
+/** Erro do decodificador cujo formato é de áudio (o som já estava sendo decodificado no app: trocar para PCM não muda nada). */
+private fun audioFalhaDecoder(e: PlaybackException): Boolean = e.errorCode in 4001..4003 && erroDoSom(e)
 
 @OptIn(UnstableApi::class)
 private class Engine(ctx: android.content.Context, cacheMs: Int, live: Boolean = false) {
@@ -547,7 +550,8 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 // teste: rede/formato (e, no clássico, decodificador que não aguenta o 4K) passam para o próximo vídeo de reserva
                 if (req.teste) PlayerDiag.lastError = e.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')
                 if (req.teste && (e.errorCode in 2000..3999 || (!direto && e.errorCode in 4000..4999)) && testeReserva < VideoOut.TESTE_RESERVA.size) { url = VideoOut.TESTE_RESERVA[testeReserva++]; attempt++; return }
-                if (direto && (e.errorCode in 7000..7999 || e.errorCode in 4000..4999)) {
+                // erro de som (decodificador de áudio) não desliga o vídeo direto: o vídeo não tem culpa (emulador: c2.android.mp3.decoder)
+                if (direto && !erroDoSom(e) && (e.errorCode in 7000..7999 || e.errorCode in 4000..4999)) {
                     // vídeo direto não funcionou nesta TV: volta para o clássico e lembra para os próximos vídeos
                     direto = false; if (PP.videoMode == "auto") PP.diretoFalhou = true; ai.key = ""
                     Reporter.evento(ctx, "video-direto", "Vídeo direto falhou (${e.errorCodeName}); voltou para o clássico", e)
@@ -571,7 +575,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 val formato = e.errorCode in 4000..4999 || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
                 if (formato && !url.startsWith("file:") && Conversor.disponivel()) {
                     // só o som não toca (ex.: AC3/DTS): converte só o áudio, bem mais rápido
-                    val soSom = (e as? androidx.media3.exoplayer.ExoPlaybackException)?.let { it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && androidx.media3.common.MimeTypes.isAudio(it.rendererFormat?.sampleMimeType) } == true
+                    val soSom = erroDoSom(e)
                     val videoSemSuporte = tracks.groups.any { it.type == MC.TRACK_TYPE_VIDEO && !it.isSupported }
                     convOferta = if (soSom && !videoSemSuporte) "audio" else "video"; err = null; wait = 0
                     android.util.Log.i("LumeStar", "conversor: oferta ${convOferta} (erro ${e.errorCodeName}, ${(e as? androidx.media3.exoplayer.ExoPlaybackException)?.rendererFormat?.sampleMimeType})"); return
