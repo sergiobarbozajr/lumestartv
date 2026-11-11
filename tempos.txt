@@ -1,0 +1,14 @@
+abertura_01 1365 ms
+abertura_02 2484 ms
+abertura_03 3534 ms
+abertura_04 4624 ms
+abertura_05 5658 ms
+abertura_06 6881 ms
+abertura_07 8061 ms
+abertura_08 9064 ms
+abertura_09 10050 ms
+abertura_10 11442 ms
+abertura_11 12437 ms
+abertura_12 13661 ms
+abertura_13 14650 ms
+abertura_14 15655 ms

@@ -1,0 +1,20 @@
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at androidx.media3.datasource.DefaultHttpDataSource.open(DefaultHttpDataSource.java:436)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at androidx.media3.datasource.DefaultDataSource.open(DefaultDataSource.java:275)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at androidx.media3.datasource.StatsDataSource.open(StatsDataSource.java:86)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at androidx.media3.datasource.DataSourceInputStream.checkOpened(DataSourceInputStream.java:101)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at androidx.media3.datasource.DataSourceInputStream.open(DataSourceInputStream.java:64)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at androidx.media3.exoplayer.upstream.ParsingLoadable.load(ParsingLoadable.java:182)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at androidx.media3.exoplayer.upstream.Loader$LoadTask.run(Loader.java:421)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1167)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:641)
+11-11 19:51:57.595  5104  5153 E ExoPlayerImplInternal:       at java.lang.Thread.run(Thread.java:923)
+11-11 19:52:15.046  5289  5289 I ExoPlayerImpl: Init 855cad0 [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:52:25.271  5377  5377 I ExoPlayerImpl: Init 1b82a01 [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:52:37.212  5574  5574 I ExoPlayerImpl: Init f88e5ff [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:52:47.725  5661  5661 I ExoPlayerImpl: Init f0d4188 [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:52:55.875  5751  5751 I ExoPlayerImpl: Init f88e5ff [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:53:05.323  5879  5879 I ExoPlayerImpl: Init 84beae7 [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:53:14.440  5978  5978 I ExoPlayerImpl: Init 597cfcc [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:53:24.139  6064  6064 I ExoPlayerImpl: Init fe2791e [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:53:28.329  6064  6064 I ExoPlayerImpl: Init dd057ec [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]
+11-11 19:54:25.536  6212  6212 I ExoPlayerImpl: Init 7cd9a93 [AndroidXMedia3/1.3.1] [generic_x86_64, Android SDK built for x86_64, unknown, 30]

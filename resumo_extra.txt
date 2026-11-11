@@ -1,0 +1,13 @@
+celular: enviado
+tema anime: recebido
+controle: pagina ok
+controle: sem codigo recusado
+== cabeçalhos por canal ==
+ok   /ref/m3u/ tocou com o cabeçalho certo
+ok   /ua/m3u/ tocou com o cabeçalho certo
+ok   /both/json/ tocou com o cabeçalho certo
+ok   /both/kodi/ tocou com o cabeçalho certo
+ok   servidor recusou o canal sem cabeçalho (o teste é válido)
+ok   capa do JSON (campo capa) carregou
+ok   conversor mpeg2: converteu e tocou (começando com mpeg4)
+ok   conversor ac3: converteu e tocou (começando com mpeg4)

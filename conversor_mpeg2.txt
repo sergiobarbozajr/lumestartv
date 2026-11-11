@@ -1,0 +1,27 @@
+11-11 19:57:33.831  7360  7360 I ffmpeg-kit: Loading ffmpeg-kit.
+11-11 19:57:33.838  7360  7360 I ffmpeg-kit: Loaded ffmpeg-kit-min-x86_64-6.0-20261111.
+11-11 19:57:33.839  7360  7360 I LumeStar: conversor: oferta video (trilha de vídeo sem suporte)
+11-11 19:57:33.854  7360  7437 D ffmpeg-kit: Async callback block started.
+11-11 19:57:33.966  7360  7360 I LumeStar: conversor: oferta video (trilha de vídeo sem suporte)
+11-11 19:57:34.065  7360  7360 I LumeStar: conversor: oferta video (trilha de vídeo sem suporte)
+11-11 19:57:45.016  7360  7471 I LumeStar: conversor: começando com mpeg4
+11-11 19:57:45.088  7360  7473 W LumeStar: proxy local: Connection reset
+11-11 19:57:45.600  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00000.m4s' for writing
+11-11 19:57:45.601  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:46.004  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00001.m4s' for writing
+11-11 19:57:46.004  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:46.204  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00002.m4s' for writing
+11-11 19:57:46.204  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:46.482  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00003.m4s' for writing
+11-11 19:57:46.482  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:46.779  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00004.m4s' for writing
+11-11 19:57:46.780  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:46.916  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00005.m4s' for writing
+11-11 19:57:46.916  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:47.339  7360  7360 I LumeStar: conversor: tocando o vídeo convertido
+11-11 19:57:47.556  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00006.m4s' for writing
+11-11 19:57:47.556  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:48.301  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00007.m4s' for writing
+11-11 19:57:48.302  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:57:48.607  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00008.m4s' for writing
+11-11 19:57:48.607  7360  7437 I ffmpeg-kit: [hls @ 0x779d8f1f7700] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing

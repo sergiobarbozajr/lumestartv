@@ -1,0 +1,24 @@
+== Navegacao pelo controle (GPU simulada do emulador) ==
+Total frames rendered: 26
+Janky frames: 26 (100.00%)
+50th percentile: 200ms
+90th percentile: 950ms
+99th percentile: 2000ms
+celular: enviado
+tema anime: recebido
+controle: pagina ok
+controle: sem codigo recusado
+== cabeçalhos por canal ==
+ok   /ref/m3u/ tocou com o cabeçalho certo
+ok   /ua/m3u/ tocou com o cabeçalho certo
+ok   /both/json/ tocou com o cabeçalho certo
+ok   /both/kodi/ tocou com o cabeçalho certo
+ok   servidor recusou o canal sem cabeçalho (o teste é válido)
+ok   capa do JSON (campo capa) carregou
+ok   conversor mpeg2: converteu e tocou (começando com mpeg4)
+ok   conversor ac3: converteu e tocou (começando com mpeg4)
+11-11 20:01:26.322  8972  8972 I LumeStar: enviar pelo celular: ouvindo na porta 8765
+11-11 20:01:36.089  9081  9081 I LumeStar: enviar pelo celular: ouvindo na porta 8765
+11-11 20:01:43.241  9161  9161 I LumeStar: enviar pelo celular: ouvindo na porta 8765
+11-11 20:01:50.379  9253  9253 I LumeStar: enviar pelo celular: ouvindo na porta 8765
+11-11 20:01:52.187  9253  9253 I LumeStar: tempo até tocar: 361 ms

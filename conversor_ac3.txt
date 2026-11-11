@@ -1,0 +1,24 @@
+11-11 19:58:15.791  7535  7535 I ffmpeg-kit: Loading ffmpeg-kit.
+11-11 19:58:15.804  7535  7535 I ffmpeg-kit: Loaded ffmpeg-kit-min-x86_64-6.0-20261111.
+11-11 19:58:15.804  7535  7535 I LumeStar: conversor: oferta video (trilha de vídeo sem suporte)
+11-11 19:58:15.819  7535  7610 D ffmpeg-kit: Async callback block started.
+11-11 19:58:27.304  7535  7637 I LumeStar: conversor: começando com mpeg4
+11-11 19:58:27.723  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00000.m4s' for writing
+11-11 19:58:27.723  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:28.018  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00001.m4s' for writing
+11-11 19:58:28.018  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:28.154  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00002.m4s' for writing
+11-11 19:58:28.154  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:28.441  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00003.m4s' for writing
+11-11 19:58:28.442  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:28.733  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00004.m4s' for writing
+11-11 19:58:28.734  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:28.890  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00005.m4s' for writing
+11-11 19:58:28.890  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:29.169  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00006.m4s' for writing
+11-11 19:58:29.169  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:29.615  7535  7535 I LumeStar: conversor: tocando o vídeo convertido
+11-11 19:58:29.817  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00007.m4s' for writing
+11-11 19:58:29.817  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing
+11-11 19:58:30.276  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/p00008.m4s' for writing
+11-11 19:58:30.276  7535  7610 I ffmpeg-kit: [hls @ 0x779d8f1f22c0] Opening '/data/user/0/com.lumestar.tv/cache/conversao/saida.m3u8.tmp' for writing

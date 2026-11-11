@@ -1,0 +1,2 @@
+https://dash.akamaized.net/akamai/streamroot/050714/Spring_4Ktest.mpd 200
+https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8 200
