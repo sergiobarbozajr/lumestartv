@@ -181,7 +181,6 @@ private fun tracksOf(t: Tracks, type: Int): List<TrackOpt> {
     return out
 }
 
-@OptIn(UnstableApi::class)
 /** Erro do decodificador cujo formato é de áudio (ex.: AC3/E-AC3 que a TV diz tocar mas não abre). */
 @OptIn(UnstableApi::class)
 private fun audioFalhaDecoder(e: PlaybackException): Boolean =
@@ -189,6 +188,7 @@ private fun audioFalhaDecoder(e: PlaybackException): Boolean =
         it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER && MimeTypes.isAudio(it.rendererFormat?.sampleMimeType)
     } == true
 
+@OptIn(UnstableApi::class)
 private class Engine(ctx: android.content.Context, cacheMs: Int) {
     val ok: OkHttpDataSource.Factory
     val ds: DefaultDataSource.Factory
