@@ -336,7 +336,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
     var medindo by remember { mutableStateOf(false) }
     var cmpOn by remember { mutableStateOf(false) }
     // estado da IA de imagem neste vídeo: cap = limite do disjuntor (2 Ultra, 1 Alta, 0 sem reforço)
-    val ai = remember { object { var key = ""; var cap = 2; var hadFx = false; var compare = false; var lost = 0L; var stable = 0; var tier = 0; var outH = 0; var hot = 0; var bestOn = false; var buffered = false; val hist = LongArray(10); var idx = 0 } }
+    val ai = remember { object { var key = ""; var cap = 2; var hadFx = false; var quadro1 = 0; var compare = false; var lost = 0L; var stable = 0; var tier = 0; var outH = 0; var hot = 0; var bestOn = false; var buffered = false; val hist = LongArray(10); var idx = 0 } }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
@@ -523,6 +523,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             }
             override fun onIsPlayingChanged(p: Boolean) { playing = p }
             override fun onRenderedFirstFrame() {
+                ai.quadro1++ // teste de desempenho: conta se a imagem voltou depois da troca clássico → direto
                 if (tInicio > 0 && inicioMs < 0) { inicioMs = android.os.SystemClock.elapsedRealtime() - tInicio; android.util.Log.i("LumeStar", "tempo até tocar: $inicioMs ms") }
             }
             override fun onTracksChanged(t: Tracks) {
@@ -636,6 +637,7 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
         PlayerDiag.lastError = ""
         val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
         suspend fun fase(dir: Boolean, nome: String): Pair<Boolean, String> {
+            val q1Antes = ai.quadro1
             direto = dir; ai.cap = 2; ai.key = ""
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setForceHighestSupportedBitrate(true).build()
             testeMsg = "Teste de desempenho · $nome…"
@@ -651,8 +653,10 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
                 (if (PlayerDiag.lastError.isNotEmpty()) " (${PlayerDiag.lastError})" else " (sem resposta do servidor)")
             delay(4000)
             val c0 = player.videoDecoderCounters; c0?.ensureUpdated(); val r0 = c0?.renderedOutputBufferCount ?: 0; val d0 = c0?.droppedBufferCount ?: 0
+            val e0 = c0?.queuedInputBufferCount ?: 0; val p0 = player.currentPosition
             delay(15000)
             val c1 = player.videoDecoderCounters; c1?.ensureUpdated()
+            val e1 = c1?.queuedInputBufferCount ?: 0; val andou = (player.currentPosition - p0) / 1000
             var r = (c1?.renderedOutputBufferCount ?: 0) - r0; var d = (c1?.droppedBufferCount ?: 0) - d0
             if (r < 0 || d < 0) { r = c1?.renderedOutputBufferCount ?: 0; d = c1?.droppedBufferCount ?: 0 }
             val h = player.videoFormat?.height ?: 0
@@ -661,7 +665,11 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             val ok = !caiu && !quente && r > 0 && d <= maxOf(3, r / 50)
             val saida = if (dir) (if (ai.outH > 0) ai.outH else h) else minOf(h, ImageAi.telaH)
             return ok to "$nome: ${if (ok) "aprovado" else "reprovado"} · vídeo ${h}p → tela ${saida}p · $d de ${r + d} quadros perdidos" +
-                (if (quente) " · TV esquentou" else "") + (if (caiu) " · deu erro e voltou ao clássico" else "")
+                (if (quente) " · TV esquentou" else "") + (if (caiu) " · deu erro e voltou ao clássico" else "") +
+                // nenhum quadro contado: dados para separar "a contagem falhou" de "a imagem parou" (TCL A400M, Issue #2)
+                (if (r + d == 0) " · diagnóstico: tempo +${andou} s, entrada ${if (c1 == null) "sem contador" else "+${e1 - e0}"}" +
+                    ", desenhados ${c1?.renderedOutputBufferCount ?: 0}, IA ${if (ai.hadFx) "ligada" else "desligada"}" +
+                    ", 1º quadro ${if (ai.quadro1 > q1Antes) "sim" else "não"}" else "")
         }
         val a = fase(false, "Clássico")
         val podeDireto = Build.VERSION.SDK_INT >= 24 && !Perf.lite
