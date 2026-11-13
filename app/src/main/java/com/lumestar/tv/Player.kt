@@ -488,24 +488,27 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
 
     // Falha de som. Saída de som (5xxx ou som travado): 1º reabre o vídeo com o som em PCM e lembra nesta TV.
     // Decodificador de áudio: 1º tenta de novo (trocar para PCM não muda nada). Se ainda falhar: toca sem som e oferece converter o áudio.
+    // Saída de som que já está em PCM (TCL A400M: travou de novo minutos depois): também tenta de novo uma vez antes de tirar o som.
     // Devolve false quando não há mais o que tentar (o erro segue para o aviso normal).
     var semSom by remember { mutableStateOf(false) }
     var somTentou by remember { mutableStateOf(false) }
-    fun falhaSom(motivo: String, saida: Boolean): Boolean {
+    fun falhaSom(motivo: String, saida: Boolean, detalhe: String = ""): Boolean {
         if (semSom) return false
         val p = player.currentPosition
         val convertido = url.startsWith("file:")
+        val det = if (detalhe.isNotEmpty()) "\n$detalhe" else ""
         if (saida && !convertido && PP.audioMode == "auto" && !PP.audioPcm) {
             PP.audioPcm = true
-            Reporter.evento(ctx, "audio", "Som falhou ($motivo); passou a usar som PCM nesta TV", null)
+            Reporter.evento(ctx, "audio", "Som falhou ($motivo); passou a usar som PCM nesta TV$det", null)
             // aviso do app (o desta tela some junto com ela ao reabrir)
             st.say("O som não tocou: tentando de novo com outro modo de som")
             save(); st.reabrirPlayer(PlayReq(req.id, req.title, req.url, req.live, if (req.live) 0L else p, req.group, req.ext, req.cacheMs, req.teste))
             return true
         }
-        if (!saida && !somTentou) { somTentou = true; startAt = p; attempt++; return true }
+        // reabre o vídeo uma vez (o som é recriado do zero) antes de desistir do som
+        if (!somTentou) { somTentou = true; android.util.Log.i("LumeStar", "som: $motivo; tentando de novo uma vez"); startAt = p; attempt++; return true }
         semSom = true
-        Reporter.evento(ctx, "audio", "Som falhou de novo ($motivo); tocando sem som", null)
+        Reporter.evento(ctx, "audio", "Som falhou de novo ($motivo); tocando sem som$det", null)
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(MC.TRACK_TYPE_AUDIO, true).build()
         startAt = p; attempt++
         if (!convertido && Conversor.disponivel()) convOferta = "audio"
@@ -626,7 +629,15 @@ fun PlayerScreen(st: AppState, req: PlayReq, touchMode: Boolean = false) {
             // relógio do som travado: "pronto para tocar" mas o tempo não anda por 10 s (o som não sai e segura a imagem)
             val travado = player.playbackState == Player.STATE_READY && player.playWhenReady && pos == ultimaPos && player.audioFormat != null && !semSom
             parado = if (travado) parado + 1 else 0; ultimaPos = pos
-            if (parado >= 20) { parado = 0; falhaSom("som travado", true) }
+            if (parado >= 20) {
+                parado = 0
+                // dados para achar a causa (TCL A400M travou de novo já em PCM): tipo de vídeo, som, modo e quanto havia carregado
+                val f = player.audioFormat
+                val det = "detalhe: ${if (req.live) "ao vivo" else "filme/série"} · som ${f?.sampleMimeType ?: "?"} ${f?.channelCount ?: 0} canais ${f?.sampleRate ?: 0} Hz" +
+                    " · PCM ${if (PP.somPcm()) "sim" else "não"} · ${if (direto) "direto" else "clássico"} · IA ${if (ai.hadFx) "ligada" else "desligada"}" +
+                    " · carregado +${((player.bufferedPosition - pos) / 1000).coerceAtLeast(0)} s · tocando há ${(android.os.SystemClock.elapsedRealtime() - tInicio) / 60000} min"
+                falhaSom("som travado", true, det)
+            }
             SceneAi.step()
             if (SceneAi.on && n % 4 == 0 && player.isPlaying) VideoOut.foto(vview(), 64, 36) { b -> try { SceneAi.analyze(b); if (!aiLabel.contains(SceneAi.scene)) applyAiLabel() } catch (e: Throwable) {} }
         }
